@@ -1,0 +1,12 @@
+# GraphFlow 工具缓存（本地生成，一直在变，不必进仓库）
+.graphflow/
+graphflow-out/
+
+# 预览图等中间产物
+tools/*.png
+*.log
+
+# 系统垃圾
+Thumbs.db
+.DS_Store
+desktop.ini
