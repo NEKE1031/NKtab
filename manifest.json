@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "NKtab",
+  "version": "1.8.0",
+  "description": "简洁的新标签页：大字色块快捷方式 + 搜索框 + 搜索记录 + 天气（含逐小时）+ 36 张自带壁纸的壁纸库。",
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "permissions": ["storage", "unlimitedStorage"],
+  "host_permissions": [
+    "https://weather.service.msn.com/*",
+    "https://api.msn.com/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
