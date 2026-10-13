@@ -5,25 +5,26 @@
 
 ## 文档
 
-- [NKtab-大白话说明.md](NKtab-大白话说明.md) —— 零基础版，先看这份
-- [NKtab-技术框架设计.md](NKtab-技术框架设计.md) —— 技术细节
-- [V1-功能清单.md](V1-功能清单.md) —— 这一版要做什么
-- [使用说明.md](使用说明.md) —— 怎么装进浏览器、怎么用
+* [NKtab-大白话说明.md](NKtab-大白话说明.md) —— 零基础版，先看这份
+* [NKtab-技术框架设计.md](NKtab-技术框架设计.md) —— 技术细节
+* [V1-功能清单.md](V1-功能清单.md) —— 这一版要做什么
+* [使用说明.md](使用说明.md) —— 怎么装进浏览器、怎么用
 
 ## 文件结构
 
-| 路径 | 作用 |
-|---|---|
-| `manifest.json` | 扩展的身份证（Manifest V3） |
-| `newtab.html` / `newtab.css` / `newtab.js` | 门面：新标签页本身 |
-| `storage.js` | 数据层：小抽屉（同步）/ 大柜子（本机）/ 临时桌面 |
-| `weather.js` | 天气小组件 |
-| `icons/` | 扩展图标 16 / 48 / 128 |
-| `tools/` | 生成与预览脚本（Python / Node），不是扩展运行时的一部分 |
+|路径|作用|
+|-|-|
+|`manifest.json`|扩展的身份证（Manifest V3）|
+|`newtab.html` / `newtab.css` / `newtab.js`|门面：新标签页本身|
+|`storage.js`|数据层：小抽屉（同步）/ 大柜子（本机）/ 临时桌面|
+|`weather.js`|天气小组件|
+|`icons/`|扩展图标 16 / 48 / 128|
+|`tools/`|生成与预览脚本（Python / Node），不是扩展运行时的一部分|
 
 ## 本地怎么装
 
 1. 打开 Edge，地址栏输入 `edge://extensions/`
 2. 打开左下角「开发人员模式」
 3. 点「加载解压缩的扩展」，选这个文件夹
-4. 按 `Ctrl+T` 看新标签页
+4. 按 "Ctrl+T"看新标签页
+
