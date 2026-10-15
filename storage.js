@@ -53,7 +53,7 @@ export function colorForName(name) {
   return ICON_COLORS[hash % ICON_COLORS.length];
 }
 
-/** 第一次打开时预置的网站，用户可以随便删。 */
+/** 第一次打开时预置的网站，用户可以随便删。只放大众站点，别塞自己的常用站。 */
 export const DEFAULT_BOOKMARKS = [
   { id: "d01", title: "百度", url: "https://www.baidu.com", color: "#4c7cf3" },
   { id: "d02", title: "哔哩哔哩", url: "https://www.bilibili.com", color: "#d6409f" },
@@ -67,11 +67,6 @@ export const DEFAULT_BOOKMARKS = [
   { id: "d10", title: "网易云音乐", url: "https://music.163.com", color: "#e5484d" },
   { id: "d11", title: "豆瓣", url: "https://www.douban.com", color: "#46a758" },
   { id: "d12", title: "微软必应", url: "https://www.bing.com", color: "#12a594" },
-  { id: "d13", title: "GPT", url: "https://chatgpt.com", color: "#2d3138" },
-  { id: "d14", title: "gemini", url: "https://gemini.google.com", color: "#4285f4" },
-  { id: "d15", title: "谷歌地图", url: "https://www.google.com/maps", color: "#34a853" },
-  { id: "d16", title: "HLTV", url: "https://www.hltv.org", color: "#1f4e79" },
-  { id: "d17", title: "pixiv", url: "https://www.pixiv.net", color: "#0096fa" },
 ];
 
 /* ------------------------------------------------------------------ *
