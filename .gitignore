@@ -13,6 +13,9 @@ graphflow-out/
 tools/*.png
 *.log
 
+# 打包产物（要发版时现打一个，不进仓库）
+dist/
+
 # 系统垃圾
 Thumbs.db
 .DS_Store

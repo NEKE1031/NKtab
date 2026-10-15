@@ -11,10 +11,29 @@
 
 # 一、怎么装
 
-1. 打开 Edge，地址栏输入 `edge://extensions/`
-2. 打开左下角的**开发人员模式**
-3. 点**加载解压缩的扩展**，选中这个文件夹（`NKtab` 整个目录）
-4. 按 `Ctrl+T` 打开新标签页
+## 方式一：下载发布包（普通用户走这条）
+
+1. 到 [Releases](https://github.com/NEKE1031/NKtab/releases) 下载最新的 `NKtab-v*.zip`
+2. 解压得到一个 `NKtab` 文件夹，**放在一个以后不会挪走的地方**（比如 `D:\NKtab`）
+   —— 扩展认的就是这个路径，文件夹挪走或者删掉，扩展就失效了
+3. 打开 Edge，地址栏输入 `edge://extensions/`
+4. 打开左下角的**开发人员模式**
+5. 点**加载解压缩的扩展**，选中刚才那个 `NKtab` 文件夹
+6. 按 `Ctrl+T` 打开新标签页
+
+**以后升级**：下载新 zip，解压后**覆盖掉原来那个 `NKtab` 文件夹**（路径别变），
+回 `edge://extensions/` 点一下刷新（↻）就行，不用重新添加。
+
+> 发布包里**不带任何壁纸** —— `wallpapers/` 里那些是作者自己收的图，不跟着仓库和发布包走。
+> 第一次打开是干净的渐变底，壁纸库是空的，点「＋ 添加图片」加自己喜欢的就行（见下面「换背景 / 壁纸库」）。
+
+## 方式二：直接加载仓库（自己改代码走这条）
+
+1. 把仓库 clone 下来：`git clone https://github.com/NEKE1031/NKtab.git`
+2. 打开 Edge，地址栏输入 `edge://extensions/`
+3. 打开左下角的**开发人员模式**
+4. 点**加载解压缩的扩展**，选中 clone 下来的 `NKtab` 文件夹
+5. 按 `Ctrl+T` 打开新标签页
 
 > 装好以后新标签页就换成它了。想换回来：`edge://extensions/` 里把它停用或移除即可。
 
@@ -94,11 +113,25 @@
 
 ![壁纸库](docs/05-壁纸库.png)
 
-- 自带 **36 张**壁纸（就在 `wallpapers/` 文件夹里，**完全不占**浏览器存储）
-- 也能自己加图：库里点「＋ 添加图片」，选本机的图
+- 自己加图：库里点「＋ 添加图片」，选本机的图；点一下就换成它
 - 鼠标移到某张图上，右上角出现叉，点它就从库里删掉
-- 你加的图存在浏览器本机（`chrome.storage.local`），不会同步到别的设备
-- 想换掉自带的图：直接覆盖 `wallpapers/` 里同名文件即可
+- 你加的图存在浏览器本机（`chrome.storage.local`），不会同步到别的设备，也**不占**扩展目录
+- 也能直接把本机的图**拖到页面上**，当场换上
+
+> **仓库和发布包里不带壁纸。** `wallpapers/` 里那些图是作者自己收的，带个人口味，所以不跟着代码发布。
+> 下载回来第一次打开，背景是一条干净的蓝色渐变，壁纸库是空的。
+
+### 想加回「自带壁纸」（自己用的话）
+
+代码是支持「内置壁纸」的，只是没往里放图片：
+
+1. 在项目根目录建一个 `wallpapers/` 文件夹，把图片丢进去
+2. 打开 `storage.js`，在 `BUILTIN_WALLPAPERS` 那张表里照格式登记一条：
+   `{ id: "builtin:xxx", name: "显示的名字", path: "wallpapers/你的文件名.jpg" }`
+
+图片在，壁纸库里就会把它们摆在最前面；图片不在（比如别人下载的发布包），
+那一整排会被**跳过**、背景退回渐变，不会摆出一片裂图。
+这段逻辑在 `newtab.js` 的 `builtinFileExists()`，`node tools\测试壁纸降级.mjs` 盯着它。
 
 ---
 
@@ -107,7 +140,8 @@
 |东西|存哪|会不会跟着账号同步|
 |-|-|-|
 |网站色块、待办、便签、倒计时、搜索引擎、搜索记录、当前卡片|`chrome.storage.sync`|会（都是纯文本，很小）|
-|壁纸（自带的 + 你加的）|自带在读扩展目录；加的放 `chrome.storage.local`|不会|
+|壁纸（你加的）|`chrome.storage.local`|不会|
+|壁纸（自带的，如果 `wallpapers/` 里有图）|直接读扩展目录，不占存储|不会|
 |天气数据|`chrome.storage.local`|不会|
 
 扩展只要了两个权限：`storage`（存上面那些）和 `unlimitedStorage`（壁纸图比较大）。
@@ -130,6 +164,7 @@
 |`node tools\测试图标层级.mjs`|搜索框左边的图标没被输入框盖住（z-index 回归）|
 |`node tools\测试页面结构.mjs`|页面骨架没被改坏（背景层、三栏对称、色块宫格是空的、卡片壳）|
 |`node tools\测试壁纸库.mjs`|壁纸库的增删改查|
+|`node tools\测试壁纸降级.mjs`|没有 `wallpapers/` 时（发布包）：背景退回渐变、壁纸库整排跳过、存着的坏 id 被修正|
 |`node tools\测试预置补全.mjs`|老用户补预置站点、自己删掉的不会被塞回来|
 
 `tools\假DOM.mjs` 不是测试脚本本身，是给上面那几个「要跑浏览器代码」的测试共用的一套假
@@ -143,6 +178,23 @@ DOM / 假 localStorage；要换一份存储再跑一遍 `newtab.js`，用它的 
 |`tools\gen_preview.py`|`预览.html`（本地双击看样子的，不进仓库）|
 |`tools\gen_docs_images.py`|`docs/` 里 README 用的那几张说明图|
 
+## 打包给别人用
+
+```
+node tools\打包.mjs
+```
+
+生成 `dist\NKtab-<版本>.zip`（版本号跟 `manifest.json` 里的 `version` 走）。
+解压出来就是一个 `NKtab` 文件夹，照着上面「方式一」加载即可；发
+[Release](https://github.com/NEKE1031/NKtab/releases) 就是把 `dist/` 里这个 zip 传上去。
+
+打进去哪些文件**不是写死的名单**，是从 `manifest.json` 顺着引用爬出来的：manifest 里点到的
+html / js / css / png、html 里的 `src` / `href`、js 里的 `import`。
+所以 `wallpapers/`、`docs/`、`tools/`、`README.md`、`预览.html` 都进不了包，以后新加模块也不用改这个脚本。
+
+打完它会自己核一遍：引到的文件都在硬盘上、四个必需的（manifest / newtab.html / newtab.js / newtab.css）都在、
+该排除的确实没进去，最后再读一遍 zip 的中央目录确认没写坏。
+
 ## 文件结构
 
 |路径|作用|
@@ -155,9 +207,10 @@ DOM / 假 localStorage；要换一份存储再跑一遍 `newtab.js`，用它的 
 |`lunar.js`|农历换算表（1900–2100），日历卡片用的|
 |`cards.js`|右边那栏五张卡片的画法与交互|
 |`icons/`|扩展图标 16 / 48 / 128|
-|`wallpapers/`|内置壁纸（36 张）|
+|`wallpapers/`|**仓库里没有这个文件夹**。自己往里放图，它就会变成「自带壁纸」（见上面「换背景」）|
 |`docs/`|README 里那几张说明图（图示是按 `newtab.css` 的真实数值画的，不是截图）|
 |`tools/`|测试与生成脚本（Python / Node），不是扩展运行时的一部分|
+|`dist/`|`node tools\打包.mjs` 打出来的发布包，不进仓库|
 
 ## 文档
 

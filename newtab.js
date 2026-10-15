@@ -884,21 +884,74 @@ function showEditError(message) {
 // 现在用的是哪一个（"" / "builtin:xxx" / "data:image/..."），弹窗要靠它标出「正在用」
 let currentWallpaper = "";
 
+/** 内置壁纸在扩展里的完整地址；不是内置的、或者没有扩展环境就返回空串。 */
+function builtinFileUrl(id) {
+  const path = builtinWallpaperPath(id);
+  if (!path) return "";
+  if (typeof chrome === "undefined" || !chrome.runtime) return "";
+  return chrome.runtime.getURL(path);
+}
+
+/**
+ * 内置壁纸的图片文件到底在不在。
+ *
+ * 为什么非得探一下：wallpapers/ 那 36 张是作者自己攒的图，**不进仓库、也不进
+ * 公开的发布包**（见 README「壁纸」那一节）。文件不在的时候 BUILTIN_WALLPAPERS
+ * 那张表照样是 36 条，照着铺网格就是 36 个裂图，第一次打开还会把背景指到一个
+ * 404 上 —— 与其留一片裂的，不如跳过，让 body 本来那条蓝色渐变露出来。
+ *
+ * 探过的 id 记下来，同一个只探一次。探不出来（跑测试时没有 Image）一律当不在。
+ */
+const builtinFileCache = new Map();
+
+function builtinFileExists(id) {
+  if (builtinFileCache.has(id)) return builtinFileCache.get(id);
+
+  const probe = new Promise((resolve) => {
+    const url = builtinFileUrl(id);
+    if (!url || typeof Image === "undefined") return resolve(false);
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+
+  builtinFileCache.set(id, probe);
+  return probe;
+}
+
+/**
+ * 第一张真的在的内置壁纸；一张都没有就返回空串。
+ *
+ * 36 个探测一起发出去再按表里的顺序挑 —— 串着 await 的话，发布包（一张都没有）
+ * 得等 36 轮图片加载失败才轮得到下一张，第一次打开时背景会一直空着。
+ */
+async function firstUsableBuiltin() {
+  const flags = await Promise.all(BUILTIN_WALLPAPERS.map((item) => builtinFileExists(item.id)));
+  const hit = BUILTIN_WALLPAPERS.findIndex((_, i) => flags[i]);
+  return hit === -1 ? "" : BUILTIN_WALLPAPERS[hit].id;
+}
+
 /**
  * 把存着的值变成真正能塞进 CSS 的地址。
  * 内置的那张要转成 chrome-extension://... 开头，自己加的本来就是一句话很长的那种文本。
  */
 function resolveWallpaperUrl(value) {
   if (!isBuiltinWallpaper(value)) return value;
-
-  const path = builtinWallpaperPath(value);
-  if (!path) return "";
-  if (typeof chrome === "undefined" || !chrome.runtime) return "";
-  return chrome.runtime.getURL(path);
+  return builtinFileUrl(value);
 }
 
 async function applyWallpaper() {
-  const value = await getWallpaper();
+  let value = await getWallpaper();
+
+  // 存着的是内置的、但文件不在了（发布包没带壁纸，或者用户自己清空了 wallpapers/）：
+  // 换成第一张真的在的；一张都没有就把背景让给 body 那条渐变。
+  // 这个修正只能写在视图层 —— 文件在不在得靠 Image 去探，storage.js 那边只认字符串。
+  if (isBuiltinWallpaper(value) && !(await builtinFileExists(value))) {
+    value = await firstUsableBuiltin();
+    await setWallpaper(value);
+  }
+
   const url = value ? resolveWallpaperUrl(value) : "";
   bg.style.backgroundImage = url ? `url("${url}")` : "";
 }
@@ -941,8 +994,17 @@ async function renderWallpaperLibrary() {
   // 被拿掉过的自带壁纸就不再摆出来（图片文件还在，随时能还回来）
   const hidden = await getHiddenBuiltins();
 
+  // 先并行探完再铺：串着 await 的话，弹窗得等 36 轮图片加载才画得出来
+  const usable = new Map();
+  await Promise.all(
+    BUILTIN_WALLPAPERS.map(async (item) => {
+      usable.set(item.id, await builtinFileExists(item.id));
+    })
+  );
+
   for (const item of BUILTIN_WALLPAPERS) {
-    if (hidden.includes(item.id)) continue;
+    // 文件不在的也跳过 —— 发布包里没有 wallpapers/ 时，这一整排本来就不该出现
+    if (hidden.includes(item.id) || !usable.get(item.id)) continue;
     const url = resolveWallpaperUrl(item.id);
     wpGrid.append(makeWallpaperCard(item.id, item.name, url));
   }
@@ -951,8 +1013,8 @@ async function renderWallpaperLibrary() {
     wpGrid.append(makeWallpaperCard(item.id, item.name, await getWallpaperThumb(item.id)));
   }
 
-  // 有被收起来的才显示「还回来」那个按钮
-  wpRestore.hidden = hidden.length === 0;
+  // 有被收起来、而且文件还在的，才显示「还回来」那个按钮
+  wpRestore.hidden = hidden.filter((id) => usable.get(id)).length === 0;
 
   if (!wpGrid.children.length) {
     const empty = document.createElement("p");

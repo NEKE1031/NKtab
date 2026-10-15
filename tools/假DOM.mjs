@@ -185,8 +185,58 @@ export function makeElement(tag = "div", id = "") {
   if (String(tag).toLowerCase() === "form") {
     node.requestSubmit = () => node.fire("submit", {});
   }
+  // <dialog> 那三个：newtab.js 靠 open 判断要不要 showModal()
+  node.open = false;
+  node.showModal = () => {
+    node.open = true;
+  };
+  node.close = () => {
+    node.open = false;
+  };
   node.className = "";
   return node;
+}
+
+/**
+ * 让「内置壁纸的图片文件在不在」变得可控。
+ *
+ * newtab.js 会拿 Image 去探 wallpapers/xxx.jpg 到底在不在（发布包里没有这个目录时，
+ * 36 张内置壁纸得整排跳过，背景也不能往一个 404 上指）。真浏览器里 Image 是真去
+ * 加载图片，这里给它一个假的：src 一设，就按 paths 里有没有这个路径回 onload / onerror。
+ *
+ * paths 填扩展里的相对路径，比如 "wallpapers/desktop.jpg"；传 [] 就是一张都没有。
+ * 顺带把 chrome.runtime 架上（不给 chrome.storage，storage.js 照样退回 localStorage）。
+ *
+ * 特意不放进 mountFakePage：没调这个函数的测试保持原样（没有 Image、没有 chrome），
+ * 探不出来一律当「文件不在」。
+ */
+export function setWallpaperFiles(paths) {
+  const files = new Set(paths);
+
+  globalThis.chrome = {
+    ...(globalThis.chrome || {}),
+    runtime: { getURL: (path) => "chrome-extension://nktab/" + path },
+  };
+
+  globalThis.Image = class {
+    constructor() {
+      this.onload = null;
+      this.onerror = null;
+      this._src = "";
+    }
+    get src() {
+      return this._src;
+    }
+    set src(value) {
+      this._src = String(value);
+      const path = this._src.replace("chrome-extension://nktab/", "");
+      // 真图片是异步来的，这里也异步回，免得调用方以为「设了就同步到位」
+      setTimeout(() => {
+        if (files.has(path)) this.onload?.();
+        else this.onerror?.();
+      }, 0);
+    }
+  };
 }
 
 /** 把整个页面环境顶好：document / window / localStorage / rAF 全套。 */

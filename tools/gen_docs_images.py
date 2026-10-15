@@ -500,6 +500,37 @@ def tile_shot():
 
 # ============================ 5. 壁纸库 ============================
 
+# 缩略图一律画成占位图，**不去读 wallpapers/ 里的真图**。
+# 那些是作者自己收的图，带个人口味；这张图要跟着 README 发到 GitHub 上，不能带出去。
+TILE_PALETTES = [
+    ((24, 34, 62), (86, 132, 208), (168, 202, 255)),
+    ((40, 22, 58), (152, 92, 176), (236, 186, 255)),
+    ((16, 44, 46), (52, 148, 138), (168, 236, 214)),
+    ((52, 30, 20), (198, 122, 62), (255, 214, 160)),
+    ((22, 30, 44), (74, 96, 132), (196, 212, 236)),
+    ((30, 40, 28), (104, 150, 86), (206, 232, 176)),
+    ((44, 24, 34), (168, 84, 108), (246, 190, 200)),
+    ((20, 26, 40), (60, 74, 110), (150, 168, 206)),
+]
+
+
+def placeholder_tile(size, top, bottom, accent):
+    """一块竖向渐变 + 两个柔光圆，冒充一张壁纸缩略图。"""
+    w, h = size
+    tile = Image.new("RGBA", size)
+    d = ImageDraw.Draw(tile)
+    for y in range(h):
+        t = y / max(1, h - 1)
+        d.line([(0, y), (w, y)],
+               fill=tuple(int(top[i] + (bottom[i] - top[i]) * t) for i in range(3)) + (255,))
+
+    glow = Image.new("RGBA", size, (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse((w * 0.56, -h * 0.62, w * 1.30, h * 0.46), fill=accent + (96,))
+    gd.ellipse((-w * 0.14, h * 0.52, w * 0.44, h * 1.34), fill=accent + (58,))
+    return Image.alpha_composite(tile, glow)
+
+
 def wallpaper_shot():
     W, H = 1300, 640
     base = Image.new("RGBA", (W, H), (16, 20, 30, 255))
@@ -515,16 +546,14 @@ def wallpaper_shot():
     text(d, (dx + 28, dy + 66), "点一下图片就换成它；鼠标移到图上，右上角会出现 ×，点它就从库里删掉",
          12, False, "lm", (255, 255, 255, 160))
 
-    names = ["desktop.jpg", "pic3.jpg", "bing2.jpg", "bing5.jpg", "we02.jpg", "we08.jpg",
-             "we24.jpg", "we16.jpg"]
     cols, rows = 4, 2
     cw, ch = 258, 150
     gx = (dw - 56 - cols * cw) // (cols - 1)
-    for i, name in enumerate(names):
+    for i in range(cols * rows):
         row, col = divmod(i, cols)
         x = dx + 28 + col * (cw + gx)
         y = dy + 96 + row * (ch + 40)
-        image = cover(PROJECT / "wallpapers" / name, (cw, ch))
+        image = placeholder_tile((cw, ch), *TILE_PALETTES[i])
         base.alpha_composite(image, (x, y))
         ring(base, (x, y, x + cw, y + ch), 12, (255, 255, 255, 46), 1)
         if i == 1:
@@ -533,9 +562,9 @@ def wallpaper_shot():
             rrect(base, (x + cw - 30, y + 6, x + cw - 6, y + 30), 8, (10, 14, 22, 220))
             cross(base, x + cw - 18, y + 18, 4, (255, 220, 220, 240), 2)
 
-    text(d, (dx + 28, dy + dh - 34), "库里的图存在浏览器本机（chrome.storage.local），不占同步空间；自带 36 张，随时能删，也能拖图片到页面上直接换上",
+    text(d, (dx + 28, dy + dh - 34), "自己加的图存在浏览器本机（chrome.storage.local），不占同步空间；随时能删，也能把图片直接拖到页面上换上",
          11, False, "lm", (255, 255, 255, 160))
-    text(d, (W / 2, H - 18), "图是按 newtab.css 的真实数值画的示意图，缩略图用的是真壁纸文件", 11, False,
+    text(d, (W / 2, H - 18), "图是按 newtab.css 的真实数值画的示意图，缩略图是画出来的占位图（仓库里不带壁纸文件）", 11, False,
          "mm", (255, 255, 255, 130))
     return base.convert("RGB")
 
