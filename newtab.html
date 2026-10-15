@@ -84,15 +84,10 @@
         </div>
       </aside>
 
-      
-      <div class="center">
-
-        <!-- 网站色块宫格，内容由 newtab.js 生成 -->
-        <div class="grid" id="grid"></div>
-
-        
-
-      </div>
+      <!-- 中间这一列：网站色块宫格。内容是 newtab.js 用 replaceChildren 整个换掉的，
+           所以别往里塞静态元素（会被一起拿掉）；要加东西就加在这一层外面，
+           但那样会把中间这一列挤得不居中，加之前先想清楚。 -->
+      <div class="grid" id="grid"></div>
 
       <!-- 右边这一栏：好几张功能卡片叠在一条栏杆上，一次只露一张，
            左右箭头 / 圆点 / 键盘 ←→ / 横向拖动 都能换张。

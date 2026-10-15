@@ -11,6 +11,8 @@
  *   node tools\测试侧栏轮播.mjs
  */
 
+import { readFileSync } from "node:fs";
+
 /* ---------------- 极简假 DOM ---------------- */
 
 function makeClassList(node) {
@@ -105,10 +107,13 @@ function makeElement(tag = "div", id = "") {
 }
 
 const stubs = new Map();
+// 按 class 找节点用（newtab.js 里 document.querySelector(".panel") 要拿到整个右栏）
+const byClass = new Map();
 const documentStub = {
   listeners: {},
   documentElement: makeElement("html"),
   body: makeElement("body"),
+  hidden: false,                     // 自动翻页会看它决定停不停
   getElementById(id) {
     if (!stubs.has(id)) stubs.set(id, makeElement("div", id));
     return stubs.get(id);
@@ -120,7 +125,13 @@ const documentStub = {
     (this.listeners[type] ||= []).push(fn);
   },
   removeEventListener() {},
-  querySelector: () => null,
+  /* 派发一个 document 级事件（自动翻页听的 visibilitychange 要它） */
+  fire(type) {
+    (this.listeners[type] || []).forEach((fn) => fn({ target: this }));
+  },
+  querySelector(sel) {
+    return sel.startsWith(".") ? byClass.get(sel.slice(1)) || null : null;
+  },
   querySelectorAll: () => [],
 };
 
@@ -128,12 +139,17 @@ const documentStub = {
 const panelTrack = makeElement("div", "panel-track");
 const panelDots = makeElement("div", "panel-dots");
 const panelView = makeElement("div", "panel-view");
+// 整个右栏那个 aside：自动翻页要往它身上挂 mouseenter / mouseleave
+const panelBox = makeElement("aside", "panel");
+byClass.set("panel", panelBox);
 stubs.set("panel-track", panelTrack);
 stubs.set("panel-dots", panelDots);
 stubs.set("panel-view", panelView);
 
-
+/* newtab.js 里有两套定时器：天气的 setInterval，和自动翻页的 setTimeout。
+   这里不能让它真的定时器挂着，否则 Node 永远不会退出，所以只记账不排期。 */
 const timers = new Set();
+const timeouts = new Set();      // 同上，给 setTimeout 用（自动翻页靠它）
 
 globalThis.document = documentStub;
 globalThis.window = {
@@ -148,8 +164,16 @@ globalThis.window = {
   clearInterval(id) {
     timers.delete(id);
   },
-  setTimeout: (fn, ms) => setTimeout(fn, ms),
-  clearTimeout: (id) => clearTimeout(id),
+  /* 自动翻页用的是 setTimeout（三分钟一次）。这里也做成「只记账」：
+     一来测试可以手动把它「快进」过去，二来进程不会被一个挂着的定时器拖住。 */
+  setTimeout(fn, ms) {
+    const id = { fn, ms };
+    timeouts.add(id);
+    return id;
+  },
+  clearTimeout(id) {
+    timeouts.delete(id);
+  },
   innerWidth: 1440,
   innerHeight: 900,
 };
@@ -157,6 +181,14 @@ globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
 globalThis.matchMedia = globalThis.window.matchMedia;
 globalThis.getComputedStyle = () => ({ getPropertyValue: () => "" });
+
+/* 把记着账的定时器按条件① 全触发一遍（模拟时间到了） */
+function fireTimeouts(match = () => true) {
+  const due = [...timeouts].filter(match);
+  for (const id of due) timeouts.delete(id);
+  for (const id of due) id.fn();
+  return due.length;
+}
 
 const store = new Map();
 globalThis.localStorage = {
@@ -277,7 +309,70 @@ stubs.get("panel-next").click();
 await sleep(340);
 expect("连按两次只走一张", dotStates(), "00001");
 
-// 11. 存着的 id 认不出来时，兜回第一张而不是报错
+// 11. 自动翻页：闲着三分钟自己往下走一张，走完接着排下一次
+const autoTimers = [...timeouts].filter((t) => t.ms === 3 * 60 * 1000);
+expect("自动翻页的定时器只有一个", autoTimers.length, 1);
+
+// 把这一张的点记下来，等会儿对「翻过去的是下一张」
+const beforeAuto = dotStates();
+// 只「快进」自动翻页那一个定时器。（顺带说明：showPanelSlide 自己那个 300ms
+// 「动画做完了」的锁也被这一下取消了，所以下面得先等它落定再点，否则点击会被
+// panelBusy() 挡回去，看着像点击没绑上 —— 这个坑真踩过。）
+fireTimeouts((t) => t.ms === 3 * 60 * 1000);
+await sleep(10);
+expect("三分钟到了自己翻一张", dotStates() !== beforeAuto, true);
+expect("自动翻完又排了下一次", [...timeouts].filter((t) => t.ms === 3 * 60 * 1000).length, 1);
+
+// 鼠标停在栏里 -> 停；移开 -> 重新开始
+panelBox.fire("mouseenter");
+const afterEnter = [...timeouts].filter((t) => t.ms === 3 * 60 * 1000).length;
+expect("鼠标停进栏里就不自动翻了", afterEnter, 0);
+panelBox.fire("mouseleave");
+expect("鼠标移开又开始转", [...timeouts].filter((t) => t.ms === 3 * 60 * 1000).length, 1);
+
+// 11b. 人自己翻了一下 -> 计时重新开始（旧的那个定时器要被撤掉、换一个新的）
+// 注意：要先把「现在那个定时器」这个引用自己攥住，不能等动作做完再读数组 ——
+// 数组里已经换成新的了，拿它跟新的比永远相等（第一版就是这么写错的）。
+await sleep(400);                   // 等自动翻页那一下的动画彻底落定
+
+const beforeUserStep = [...timeouts].filter((t) => t.ms === 3 * 60 * 1000)[0];
+stubs.get("panel-next").click();
+await sleep(340);
+const afterUserStep = [...timeouts].filter((t) => t.ms === 3 * 60 * 1000);
+expect("人自己翻一张之后，自动翻页的计时重新开始", afterUserStep.length, 1);
+expect("旧的那个定时器被撤掉了（不是攒了两个）", beforeUserStep && timeouts.has(beforeUserStep), false);
+expect("换成了一个新的定时器", afterUserStep[0] === beforeUserStep, false);
+
+// 11c. 点圆点也一样重新计时
+const beforeDot = [...timeouts].filter((t) => t.ms === 3 * 60 * 1000)[0];
+stubs.get("panel-dots").children[0].click();
+await sleep(340);
+const afterDot = [...timeouts].filter((t) => t.ms === 3 * 60 * 1000);
+expect("点圆点之后也只排着一个定时器", afterDot.length, 1);
+expect("换了新定时器", afterDot[0] === beforeDot, false);
+
+// 11d. 切到别的标签页 -> 停；切回来 -> 接着转
+documentStub.hidden = true;
+documentStub.fire("visibilitychange");
+expect("标签页切到后台就不翻了", [...timeouts].filter((t) => t.ms === 3 * 60 * 1000).length, 0);
+documentStub.hidden = false;
+documentStub.fire("visibilitychange");
+expect("切回前台又开始转", [...timeouts].filter((t) => t.ms === 3 * 60 * 1000).length, 1);
+
+// 11e. 一直自动翻，翻到最后一张会绕回第一张
+for (let i = 0; i < 7; i++) {
+  fireTimeouts((t) => t.ms === 3 * 60 * 1000);
+  await sleep(10);
+}
+expect("自动翻页翻到头会绕回第一张", dotStates().includes("1"), true);
+expect("绕回去之后还在继续排下一次", [...timeouts].filter((t) => t.ms === 3 * 60 * 1000).length, 1);
+
+// 11f. 「只有一张卡片时不用转」那条分支，是看源码里那句判断还在不在。
+//      （真要凑成一张卡片得把五张卡全注销掉，代价太大、收益太小。）
+const src = readFileSync(new URL("../newtab.js", import.meta.url), "utf8");
+expect("源文件里有「只有一张就不自动翻」的判断", /PANEL_SLIDES\.length < 2\s*\)\s*return/.test(src), true);
+
+// 12. 存着的 id 认不出来时，兜回第一张而不是报错
 const freshTrack = makeElement("div", "panel-track");
 freshTrack.style = { setProperty() {}, removeProperty() {} };
 store.set("nk.panel.card", JSON.stringify("已经没有这张卡片了"));

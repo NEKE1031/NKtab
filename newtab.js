@@ -3,11 +3,12 @@
  *
  * 六件事：
  *   1. 把网站列表画成一片长方形色块，块上是这个网站的名字（点一下新开标签页打开）
- *   2. 搜索框：打字回车 -> 必应，新开一个标签页
+ *   2. 搜索框：打字回车 -> 选中的那个搜索引擎，新开一个标签页
  *   3. 加 / 删 / 改网站（改名字、改网址、改颜色）
  *   4. 按住色块拖动能调整顺序
  *   5. 换背景图
- *   6. 右边那一栏里的卡片轮播（左右箭头 / 圆点 / 键盘 ←→ / 横滑换卡片）
+ *   6. 右边那一栏里的卡片轮播（左右箭头 / 圆点 / 键盘 ←→ / 横滑换卡片，
+ *      没人碰的时候每三分钟自己翻一张）
  */
 
 import {
@@ -50,7 +51,6 @@ import {
 import { fetchWeather, iconFor, REFRESH_AFTER } from "./weather.js";
 
 import { CARDS } from "./cards.js";
-
 
 import { ENGINES, DEFAULT_ENGINE, findEngine, targetFor } from "./search.js";
 
@@ -131,6 +131,7 @@ const panelNext = document.getElementById("panel-next");
 const panelView = document.getElementById("panel-view");
 const panelTrack = document.getElementById("panel-track");
 const panelDots = document.getElementById("panel-dots");
+const panel = document.querySelector(".panel");   // 整个右侧栏（自动翻页要靠它判断鼠标在不在里面）
 
 /* ---------------- 内存里的状态 ---------------- */
 
@@ -1363,6 +1364,16 @@ let panelIndex = 0;        // 现在露的是第几张（0 起）
 let panelMounted = null;   // 已经挂上的那张卡片
 let panelSwitching = false; // 正在做切换动画，这期间不再接新的切换
 
+/**
+ * 没人碰的时候，每隔这么久自动翻到下一张。
+ *
+ * 想改快改慢就改这个数（毫秒）：三分钟 = 3 * 60 * 1000。
+ * 只留一张卡片时它自己不转（转了也还是同一张）。
+ */
+const PANEL_AUTOPLAY_MS = 3 * 60 * 1000;
+
+let panelTimer = null;      // 自动翻页的定时器，暂停时是 null
+
 /** 不管传进来什么，都折回 0 ~ 总数-1 的范围里（负数、超界都行）。 */
 function wrapIndex(index) {
   const total = PANEL_SLIDES.length;
@@ -1398,7 +1409,7 @@ function paintPanelHead() {
  * 记住看到哪儿了。setPanelCard 是异步的（可能走 chrome.storage），
  * 但界面不等它 —— 存丢了顶多下次回到第一张，不至于卡住。
  */
-function showPanelSlide(index, { animate = true } = {}) {
+function showPanelSlide(index, { animate = true, byUser = true } = {}) {
   const total = PANEL_SLIDES.length;
   if (!total) return;
 
@@ -1490,12 +1501,69 @@ function showPanelSlide(index, { animate = true } = {}) {
 
   paintPanelHead();
   setPanelCard(slide.id).catch((error) => console.error("[NKtab] 记卡片位置失败：", error));
+
+  // 人自己翻的这一下，把自动翻页的计时重新数 —— 别刚翻过去又被自动翻走
+  if (byUser) resumePanelAuto();
 }
 
-/** 下一张 / 上一张。skip 是「连续按」时的连跳张数。 */
+/** 下一张 / 上一张。 */
 function stepPanel(delta) {
   if (panelBusy()) return;
   showPanelSlide(wrapIndex(panelIndex + delta));
+}
+
+/**
+ * 自动翻页：闲着的时候自己往下走一张，绕回第一张接着走。
+ *
+ * 为什么不让它跟用户抢：
+ *   - 用户自己点了箭头 / 圆点 / 键盘（stepPanel、showPanelSlide 走的那几条路），
+ *     说明他现在正看着这一张，那就把计时重新开始，别过一会儿给他翻走；
+ *   - 鼠标停在卡片上、或者浏览器这个标签页切到后台了，也停（省电，也不打扰）。
+ *
+ * 实现上「暂停」= clearTimeout，「恢复」= 重新计时，所以永远只有一个定时器。
+ */
+function pausePanelAuto() {
+  window.clearTimeout(panelTimer);
+  panelTimer = null;
+}
+
+/*
+  ⚠️ 这里写 window.setTimeout 而不是光写 setTimeout：浏览器里两者是一回事，
+  但 Node（跑测试时）里「光写 setTimeout」拿的是全局的那个，测试想在 window 上
+  做假定时器就拦不住了。这个坑真的踩过 —— 测试里定时器一张账都没记上。
+*/
+function resumePanelAuto() {
+  pausePanelAuto();
+  if (PANEL_SLIDES.length < 2) return;      // 只有一张卡片就不用转了
+  panelTimer = window.setTimeout(() => {
+    panelTimer = null;
+    // 手正按着在拖 / 还开着菜单，就稍后再试，别硬挤进去
+    if (panelBusy()) {
+      resumePanelAuto();
+      return;
+    }
+    showPanelSlide(wrapIndex(panelIndex + 1), { byUser: false });
+    resumePanelAuto();                      // 画完了接着排下一次
+  }, PANEL_AUTOPLAY_MS);
+  // 浏览器里 setTimeout 返回的是数字，没有这个方法；Node 里有。
+  // 不加这句，一个挂着的三分钟定时器会让测试进程一直不肯退出。
+  if (panelTimer && typeof panelTimer.unref === "function") panelTimer.unref();
+}
+
+function initPanelAuto() {
+  // 鼠标停在栏里就别翻，人可能正在看 / 正在打字
+  panel.addEventListener("mouseenter", pausePanelAuto);
+  panel.addEventListener("mouseleave", () => {
+    if (!document.hidden) resumePanelAuto();
+  });
+
+  // 切到别的标签页也停，回来接着算
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) pausePanelAuto();
+    else resumePanelAuto();
+  });
+
+  resumePanelAuto();
 }
 
 /** 底下那排圆点，几张卡片就几个点。 */
@@ -1634,7 +1702,8 @@ async function initPanel() {
   const index = PANEL_SLIDES.findIndex((slide) => slide.id === saved);
 
   panelIndex = 0;                 // showPanelSlide 里要靠它判断「是不是同一张」
-  showPanelSlide(index < 0 ? 0 : index, { animate: false });
+  showPanelSlide(index < 0 ? 0 : index, { animate: false, byUser: false });
+  initPanelAuto();                // 搭好了才开始自动翻页
 }
 
 /* ---------------- 启动 ---------------- */

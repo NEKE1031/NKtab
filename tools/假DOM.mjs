@@ -1,9 +1,9 @@
 /**
  * 假DOM.mjs —— 给浏览器专用模块搭一套最小的假 DOM / 假 localStorage。
  *
- * tools\测试侧栏轮播.mjs 里内联过一份，这个文件是
- * 把它们那份抽出来复用：newtab.js import 进来就会自己跑 start()，所以要在
- * import **之前**先把 document / window / localStorage 顶掉。
+ * tools\测试侧栏轮播.mjs 和 tools\测试搜索.mjs 都用它；早些时候每个脚本各自内联
+ * 过一份，这个文件是把那份抽出来复用：newtab.js import 进来就会自己跑 start()，
+ * 所以要在 import **之前**先把 document / window / localStorage 顶掉。
  *
  * 用法：
  *   import { mountFakePage, sleep } from "./假DOM.mjs";
@@ -205,7 +205,12 @@ export function mountFakePage() {
   documentStub.createElement = (tag) => makeElement(tag);
   documentStub.createDocumentFragment = () => makeElement("#fragment");
   documentStub.createTextNode = (text) => ({ nodeType: 3, textContent: text });
-  documentStub.querySelector = () => null;
+
+  // 按 class 找：newtab.js 里 document.querySelector(".panel") 要拿到整个右侧栏
+  // （自动翻页往它身上挂 mouseenter / mouseleave）
+  const byClass = new Map();
+  documentStub.querySelector = (selector) =>
+    selector.startsWith(".") ? byClass.get(selector.slice(1)) || null : null;
   documentStub.querySelectorAll = () => [];
 
   // newtab.js 一开始就会找这几块并挂监听，先造出来
@@ -218,6 +223,8 @@ export function mountFakePage() {
   ]) {
     stubs.set(id, makeElement(tag, id));
   }
+
+  byClass.set("panel", makeElement("aside", "panel"));
 
   globalThis.document = documentStub;
   globalThis.__focused = null;
@@ -239,8 +246,9 @@ export function mountFakePage() {
     removeEventListener() {},
     setInterval: () => 1,
     clearInterval() {},
-    setTimeout: (fn, ms) => setTimeout(fn, ms),
-    clearTimeout: (id) => clearTimeout(id),
+    // 只记账不真排期：真排了的话，一个三分钟的定时器会让 Node 一直不退出
+    setTimeout: (fn, ms) => ({ fn, ms }),
+    clearTimeout() {},
     innerWidth: 1440,
     innerHeight: 900,
   };
