@@ -538,6 +538,120 @@ export async function clearWeatherCache() {
 }
 
 /* ------------------------------------------------------------------ *
+ * 右侧那一栏看的是哪张卡片
+ *
+ * 就一个 id，几个字节，放 sync：换台电脑打开还是上次看的那张。
+ * 卡片本身的数据各归各的，将来加待办 / 便签时再单独开键，别塞这里。
+ * ------------------------------------------------------------------ */
+
+const PANEL_CARD_KEY = "nk.panel.card";
+
+/** 上次看的是哪张卡片；没存过或存的已经不认识，就返回空串由调用方兜底。 */
+export async function getPanelCard() {
+  const value = await read("sync", PANEL_CARD_KEY, "");
+  return typeof value === "string" ? value : "";
+}
+
+/** 记住当前看的是哪张卡片。 */
+export async function setPanelCard(id) {
+  await write("sync", PANEL_CARD_KEY, String(id || ""));
+}
+
+/* ------------------------------------------------------------------ *
+ * 卡片自己的数据：待办 / 便签 / 倒计时 / 每日一句
+ *
+ * 四个键都放 sync。原因：都是纯文本，几十 KB 撑死也到不了 100KB 上限，
+ * 而 sync 能跟着浏览器账号走 —— 换台电脑打开，待办和便签还在，这才像话。
+ * （壁纸那种大东西才必须放 local。）
+ *
+ * 每个 set 都会把形状收一遍再存：存储里可能是旧版本留下的、或者被手动
+ * 改坏的数据，收干净了后面用起来就不用到处判断。
+ * ------------------------------------------------------------------ */
+
+const TODOS_KEY = "nk.card.todos";
+const MEMOS_KEY = "nk.card.memos";
+const COUNTDOWNS_KEY = "nk.card.countdowns";
+const QUOTE_KEY = "nk.card.quote";
+
+/**
+ * 待办列表。每条形如 { id, text, done }。
+ *
+ * @returns {Promise<Array<{id:string,text:string,done:boolean}>>}
+ */
+export async function getTodos() {
+  const raw = await read("sync", TODOS_KEY, []);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item) => item && typeof item === "object" && typeof item.text === "string")
+    .map((item, i) => ({
+      id: typeof item.id === "string" && item.id ? item.id : `t${i}`,
+      text: item.text,
+      done: !!item.done,
+    }));
+}
+
+/** 存待办列表。 */
+export async function setTodos(items) {
+  const clean = (Array.isArray(items) ? items : [])
+    .filter((item) => item && typeof item.text === "string" && item.text.trim())
+    .map((item) => ({ id: String(item.id || ""), text: String(item.text), done: !!item.done }));
+  await write("sync", TODOS_KEY, clean);
+}
+
+/** 便签正文，就是一整块文字。 */
+export async function getMemos() {
+  const raw = await read("sync", MEMOS_KEY, "");
+  return typeof raw === "string" ? raw : "";
+}
+
+/** 存便签正文。 */
+export async function setMemos(text) {
+  await write("sync", MEMOS_KEY, String(text ?? ""));
+}
+
+/**
+ * 倒计时列表。每条形如 { id, name, date }，date 是 "2026-02-17"。
+ *
+ * @returns {Promise<Array<{id:string,name:string,date:string}>>}
+ */
+export async function getCountdowns() {
+  const raw = await read("sync", COUNTDOWNS_KEY, []);
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item) => item && typeof item === "object" && typeof item.name === "string")
+    .map((item, i) => ({
+      id: typeof item.id === "string" && item.id ? item.id : `c${i}`,
+      name: item.name,
+      date: typeof item.date === "string" ? item.date : "",
+    }));
+}
+
+/** 存倒计时列表。 */
+export async function setCountdowns(items) {
+  const clean = (Array.isArray(items) ? items : [])
+    .filter((item) => item && typeof item.name === "string" && item.name.trim())
+    .map((item) => ({ id: String(item.id || ""), name: String(item.name), date: String(item.date || "") }));
+  await write("sync", COUNTDOWNS_KEY, clean);
+}
+
+/**
+ * 「换一句」攒下来的偏移量。
+ *
+ * 每天默认看哪句是靠日期算的（不用存），这里只记用户手点了几次「换一句」，
+ * 所以它是个只会往上加的小整数。
+ */
+export async function getQuoteIndex() {
+  const raw = await read("sync", QUOTE_KEY, 0);
+  return Number.isFinite(raw) ? Number(raw) : 0;
+}
+
+/** 存「换一句」的偏移量。 */
+export async function setQuoteIndex(value) {
+  const n = Number(value);
+  await write("sync", QUOTE_KEY, Number.isFinite(n) ? n : 0);
+}
+
+/* ------------------------------------------------------------------ *
  * 图片处理
  * ------------------------------------------------------------------ */
 

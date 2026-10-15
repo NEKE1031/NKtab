@@ -256,7 +256,8 @@ body {
   gap: var(--gap-y) var(--gap-x);
   flex: 1 1 auto;
   min-width: 0;
-  padding-bottom: 60px;
+  /* 下面那一栏的间距交给 .center 的 gap，这里不用再留 */
+  padding-bottom: 0;
 }
 
 .tile {
@@ -643,10 +644,81 @@ body.dragging::after {
   .weather__days { max-width: 420px; }
   /* 竖排之后 align-self:stretch 会把它拉成整条，得改回居中 */
   .panel { align-self: center; width: min(420px, 100%); }
-  .panel__slot { min-height: 110px; }
+  .panel__slide { min-height: 110px; }
 }
 
-/* ---------- 右边那一栏（暂时是空位） ---------- */
+/* ---------- 中间那一列：网站色块 ---------- */
+
+/* 自身不许被撑宽（min-width:0），否则色块宫格里的内容会把它顶出去 */
+.center {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+
+
+/* 和色块宫格一个宽度，同一套毛玻璃，看起来是宫格下面的一块，
+   而不是另起一块飘着的卡片。 */
+
+
+
+
+
+
+
+/* ---------- 左边：大奖赛名字 + 赛道图 + 国旗 + 倒计时 ---------- */
+
+
+
+/* ★ 大字号的「XXX大奖赛」，在最左边 ★ */
+
+/* 赛道图：名字右边 */
+
+
+
+/* 名字下面一行：小国旗 + 举办地点 */
+
+
+
+
+
+
+
+/* 快发车了（一小时内）或者已经发车：这一格标红一点 */
+
+
+/* ---------- 右边：周五 / 周六 / 周日，时间排在周几下面 ---------- */
+
+
+
+/* 周几：红字。正赛那天再亮一点，一眼能看出哪格是正赛 */
+
+
+
+
+
+
+/* 「练习赛P1 15:00-16:00」这样一整行 */
+
+/* 节的名字（练习赛P1 / 排位赛 / 正赛）在左，时间在右 */
+
+
+
+
+
+
+/* 放不下就把「比赛信息」和「周末时间」上下摞起来 */
+@media (max-width: 1180px) {
+}
+
+/* 再窄一点，赛道图就挪到名字下面去，别把名字挤成两三个字一行 */
+@media (max-width: 620px) {
+}
+
+/* ---------- 右边那一栏：卡片轮播 ---------- */
 
 /* 尺寸、圆角、毛玻璃、阴影全部照抄 .weather，
    这样左右两块一模一样宽，中间的宫格才是真的居中。 */
@@ -665,47 +737,567 @@ body.dragging::after {
   box-shadow: 0 16px 38px rgba(0, 0, 0, .38);
 }
 
-.panel__title {
+/* 顶上一行：这张卡片的图标 + 名字，右边两个换页箭头 */
+.panel__head {
   flex: none;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .5px;
-  opacity: .7;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 12px;
 }
 
-/* 空位本体：虚线框，撑满标题和底下那行小字之间的全部空间 */
-.panel__slot {
+.panel__icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.panel__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .4px;
+  /* 名字太长就省略，别把箭头挤出去 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.panel__nav {
+  flex: none;
+  display: flex;
+  gap: 4px;
+}
+
+/* 左右换页箭头：平时淡淡的，鼠标移上去才明显 */
+.panel__arrow {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(255, 255, 255, .1);
+  cursor: pointer;
+  transition: background .15s ease, transform .15s ease;
+}
+
+.panel__arrow svg {
+  width: 15px;
+  height: 15px;
+}
+
+.panel__arrow:hover {
+  background: rgba(255, 255, 255, .22);
+}
+
+.panel__arrow:active {
+  transform: scale(.92);
+}
+
+.panel__arrow:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, .55);
+  outline-offset: 1px;
+}
+
+/* 卡片窗口：横向切开，只露当前这一张。
+   注意 overflow 藏的是「横向多出来的卡片」，卡片自己纵向要能滚。 */
+.panel__view {
+  flex: 1 1 auto;
+  min-height: 150px;
+  overflow: hidden;
+  /* 横滑换卡片的时候，不要在页面上划出「上一页 / 下一页」来 */
+  overscroll-behavior-x: contain;
+  touch-action: pan-y;
+}
+
+/* 所有卡片首尾相接排成一条，靠整体位移决定露哪一张 */
+.panel__track {
+  display: flex;
+  height: 100%;
+  transition: transform .28s cubic-bezier(.22, .61, .36, 1);
+}
+
+/* 拖到一半还没松手时，别让 transition 跟手指较劲 */
+.panel__track--dragging {
+  transition: none;
+}
+
+/* 一张卡片。宽度跟着窗口走，不然卡片会挤成一团或者露出一半 */
+.panel__slide {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 还没做的卡片：虚线框占位，跟原来那块空位是一个说法 */
+.slide-holder {
   flex: 1 1 auto;
   display: grid;
   place-content: center;
   gap: 10px;
-  min-height: 150px;
   padding: 16px 10px;
   border: 1px dashed rgba(255, 255, 255, .26);
   border-radius: 14px;
   text-align: center;
 }
 
-.panel__plus {
+.slide-holder__plus {
   font-size: 30px;
   font-weight: 300;
   line-height: 1;
   opacity: .5;
 }
 
-.panel__hint {
+.slide-holder__hint {
   font-size: 12px;
   line-height: 1.65;
   opacity: .66;
 }
 
-.panel__note {
+/* 底下那排圆点：当前那张长一点、亮一点 */
+.panel__dots {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  margin-top: 12px;
+}
+
+.panel__dot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, .3);
+  cursor: pointer;
+  transition: width .2s ease, background .2s ease;
+}
+
+.panel__dot--on {
+  width: 16px;
+  background: rgba(255, 255, 255, .85);
+}
+
+.panel__dot:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, .55);
+  outline-offset: 2px;
+}
+
+/* ---------- 五张卡片共用的零件 ---------- */
+
+/* 卡片内部是一列：小标题、内容区、底部操作。内容区自己滚，
+   小标题和底部按钮钉住不动 —— 待办加多了才不会把输入框顶出去。 */
+.panel__slide {
+  gap: 8px;
+}
+
+/* 卡片顶上的小标题：「今天」「要做的事」这种 */
+.card__label {
   flex: none;
   font-size: 11px;
+  letter-spacing: .6px;
+  text-transform: none;
+  opacity: .5;
+}
+
+/* 一条空状态提示 */
+.card__empty {
+  flex: none;
+  margin: 4px 0;
+  font-size: 12px;
   line-height: 1.6;
-  opacity: .46;
-  margin-top: 12px;
+  opacity: .45;
+}
+
+/* 底部那行「＋ 添加」，就是个长条文字按钮 */
+.card__add {
+  flex: none;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px dashed rgba(255, 255, 255, .22);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, .05);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+
+.card__add:hover {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .38);
+}
+
+/* 小圆角文字按钮：「清空」「换一句」「刷新」 */
+.card__mini {
+  flex: none;
+  padding: 3px 9px;
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 11px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, .12);
+  cursor: pointer;
+  transition: background .15s ease;
+}
+
+.card__mini:hover { background: rgba(255, 255, 255, .22); }
+
+/* 卡片里通用的输入框 */
+.card__input {
+  flex: none;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 12px;
+  font-family: inherit;
+  background: rgba(255, 255, 255, .07);
+}
+
+.card__input::placeholder { color: rgba(255, 255, 255, .38); }
+
+.card__input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, .42);
+  background: rgba(255, 255, 255, .12);
+}
+
+/* 日期输入框里那个小日历图标在深色底上几乎看不见，反一下色 */
+.card__input--date::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: .55;
+  cursor: pointer;
+}
+
+/* ---------- ① 日历 ---------- */
+
+.calendar__big {
+  flex: none;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: .5px;
+}
+
+.calendar__weekday {
+  flex: none;
+  font-size: 12px;
+  opacity: .62;
+}
+
+/* 节日：平时藏着，有节才出来，给个暖色 */
+.calendar__festival {
+  flex: none;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  color: #ffe0b0;
+  background: rgba(255, 150, 60, .18);
+}
+
+.calendar__grid {
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+}
+
+.calendar__week {
+  padding: 2px 0;
+  font-size: 10px;
+  text-align: center;
+  opacity: .45;
+}
+
+.calendar__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 0 4px;
+  border-radius: 8px;
+}
+
+.calendar__cell--blank { visibility: hidden; }
+
+/* 今天：整格点亮，一眼能找到 */
+.calendar__cell--today {
+  background: rgba(255, 255, 255, .16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3);
+}
+
+.calendar__num {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.calendar__sub {
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1.1;
+  opacity: .5;
+  /* 农历日子最多三个字（「廿一」「九月」），超了就省略别撑破格子 */
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.calendar__cell--today .calendar__sub { opacity: .8; }
+
+/* 周末用红字，跟日历上一样 */
+.calendar__grid > .calendar__week:nth-child(6),
+.calendar__grid > .calendar__week:nth-child(7) {
+  color: #ff9a9a;
+  opacity: .75;
+}
+
+/* ---------- ② 待办 ---------- */
+
+.todo__list {
+  flex: 1 1 auto;
+  min-height: 40px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+}
+
+.todo__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 8px;
+}
+
+.todo__row:hover { background: rgba(255, 255, 255, .07); }
+
+.todo__check {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #6aa9ff;
+  cursor: pointer;
+}
+
+.todo__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.todo__row--done .todo__text {
+  text-decoration: line-through;
+  opacity: .42;
+}
+
+.todo__del {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity .15s ease, background .15s ease;
+}
+
+.todo__row:hover .todo__del { opacity: .65; }
+.todo__del:hover { opacity: 1; background: rgba(255, 90, 90, .3); }
+
+/* ---------- ③ 便签 ---------- */
+
+.memo__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.memo__area {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 120px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 12.5px;
+  line-height: 1.7;
+  font-family: inherit;
+  background: rgba(255, 255, 255, .06);
+  resize: none;
+}
+
+.memo__area::placeholder { color: rgba(255, 255, 255, .35); }
+
+.memo__area:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, .4);
+  background: rgba(255, 255, 255, .1);
+}
+
+.memo__foot {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.memo__stamp {
+  font-size: 10.5px;
+  opacity: .4;
+}
+
+/* ---------- ④ 倒计时 ---------- */
+
+.count__list {
+  flex: 1 1 auto;
+  min-height: 40px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow: auto;
+}
+
+.count__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 8px;
+}
+
+.count__row:hover { background: rgba(255, 255, 255, .07); }
+
+/* 一周以内的日子点亮一下，提醒该准备了 */
+.count__row--soon {
+  background: rgba(255, 150, 60, .12);
+}
+
+.count__left {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.count__name {
+  font-size: 12.5px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.count__date {
+  font-size: 10px;
+  opacity: .42;
+}
+
+.count__right {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.count__days {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.count__phrase {
+  font-size: 9.5px;
+  opacity: .5;
+}
+
+.count__del {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11px;
+  line-height: 1;
+  background: transparent;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity .15s ease, background .15s ease;
+}
+
+.count__row:hover .count__del { opacity: .65; }
+.count__del:hover { opacity: 1; background: rgba(255, 90, 90, .3); }
+
+.count__form {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---------- ⑤ 每日一句 ---------- */
+
+.quote__mark {
+  flex: none;
+  height: 18px;
+  font-size: 34px;
+  line-height: 1;
+  opacity: .3;
+}
+
+.quote__text {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.85;
+  letter-spacing: .2px;
+}
+
+.quote__foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.quote__date {
+  margin: 0;
+  font-size: 10.5px;
+  opacity: .45;
 }
 
 /* ---------- 弹窗 ---------- */

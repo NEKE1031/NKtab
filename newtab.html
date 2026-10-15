@@ -73,20 +73,50 @@
         </div>
       </aside>
 
-      <!-- 网站色块宫格，内容由 newtab.js 生成 -->
-      <div class="grid" id="grid"></div>
+      
+      <div class="center">
 
-      <!-- 右边这一栏：暂时先摆个空位占着。
+        <!-- 网站色块宫格，内容由 newtab.js 生成 -->
+        <div class="grid" id="grid"></div>
+
+        
+
+      </div>
+
+      <!-- 右边这一栏：好几张功能卡片叠在一条栏杆上，一次只露一张，
+           左右箭头 / 圆点 / 键盘 ←→ / 横向拖动 都能换张。
            它和左边的天气卡片一样宽（248px），两边一对称，中间的色块就正了。
-           以后想放什么（待办 / 便签 / 日历 / 倒计时 / 每日一句…），
-           把里面那三行换成真的内容就行，外面的壳不用动。 -->
+           卡片内容由 newtab.js 里的 SLIDES 生成，这里只留壳。 -->
       <aside class="panel">
-        <div class="panel__title">这一栏还空着</div>
-        <div class="panel__slot">
-          <span class="panel__plus">＋</span>
-          <span class="panel__hint">先在两边各占一块<br>中间就正了</span>
+        <div class="panel__head">
+          <span class="panel__icon" id="panel-icon" aria-hidden="true">🗓</span>
+          <span class="panel__name" id="panel-name">日历</span>
+
+          <span class="panel__nav">
+            <button class="panel__arrow" id="panel-prev" type="button" title="上一张（←）"
+                    aria-label="上一张">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 5 8 12 15 19"></polyline>
+              </svg>
+            </button>
+            <button class="panel__arrow" id="panel-next" type="button" title="下一张（→）"
+                    aria-label="下一张">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 5 16 12 9 19"></polyline>
+              </svg>
+            </button>
+          </span>
         </div>
-        <div class="panel__note">待办 / 便签 / 日历 / 倒计时<br>想放哪个说一声</div>
+
+        <!-- 窗口：只露当前这一张卡片，别的横向排在外面 -->
+        <div class="panel__view" id="panel-view">
+          <div class="panel__track" id="panel-track"></div>
+        </div>
+
+        <!-- 底下那排圆点，点哪个跳哪张 -->
+        <div class="panel__dots" id="panel-dots" role="tablist" aria-label="侧栏卡片"></div>
       </aside>
 
     </div>

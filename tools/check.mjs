@@ -4,7 +4,10 @@ const DIR = "E:\\DeepSeekHarnessWork\\NKtab\\";
 const html = readFileSync(DIR + "newtab.html", "utf8");
 const js = readFileSync(DIR + "newtab.js", "utf8");
 const css = readFileSync(DIR + "newtab.css", "utf8");
-const storage = readFileSync(DIR + "storage.js", "utf8");
+
+// 除了 newtab.js，这几个也管界面，一起对账：
+//   cards.js  右边那栏五张卡片的内容
+const UI_MODULES = ["newtab", "cards"];
 
 const fail = [];
 const note = [];
@@ -12,10 +15,17 @@ const note = [];
 /* ---- 1. HTML 里的 id ---- */
 const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
 
-/* ---- 2. JS 里 getElementById 的 id ---- */
-const usedIds = new Set(
-  [...js.matchAll(/getElementById\(\s*"([^"]+)"\s*\)/g)].map((m) => m[1])
-);
+/* ---- 2. JS 里取用的 id ----
+   newtab.js 一直用 getElementById("x")；cards.js 是拿着自己那一块
+   往里 querySelector("#x")，两种都得算数，否则会误报「HTML 里的 id 没被用到」。 */
+const usedIds = new Set();
+const sources = [];
+for (const mod of UI_MODULES) {
+  const source = mod === "newtab" ? js : readFileSync(DIR + mod + ".js", "utf8");
+  sources.push(source);
+  for (const m of source.matchAll(/getElementById\(\s*"([^"]+)"\s*\)/g)) usedIds.add(m[1]);
+  for (const m of source.matchAll(/querySelector(?:All)?\(\s*"#([\w-]+)/g)) usedIds.add(m[1]);
+}
 
 for (const id of usedIds) {
   if (!htmlIds.has(id)) fail.push(`JS 用了 id="${id}"，但 HTML 里没有`);
@@ -48,13 +58,18 @@ for (const mod of ["storage", "weather"]) {
   console.log(`导入对账：${mod}.js 导出 ${exported.size} 个，newtab.js 导入其中 ${imported.length} 个`);
 }
 
-/* ---- 4. JS 里写的 class 名 vs CSS 里定义的 ---- */
+/* ---- 4. JS 里写的 class 名 vs CSS 里定义的 ----
+   两种写法都要认：
+     newtab.js  className = "a b"      （直接赋值）
+     cards.js   el("div", { className: "a b" })   （当参数传进去，是冒号） */
 const jsClasses = new Set();
-for (const m of js.matchAll(/className\s*=\s*"([^"]+)"/g)) {
-  for (const c of m[1].split(/\s+/)) if (c) jsClasses.add(c);
-}
-for (const m of js.matchAll(/classList\.(?:add|remove|toggle)\(\s*"([^"]+)"/g)) {
-  jsClasses.add(m[1]);
+for (const source of sources) {
+  for (const m of source.matchAll(/className\s*[:=]\s*"([^"]+)"/g)) {
+    for (const c of m[1].split(/\s+/)) if (c) jsClasses.add(c);
+  }
+  for (const m of source.matchAll(/classList\.(?:add|remove|toggle)\(\s*"([^"]+)"/g)) {
+    jsClasses.add(m[1]);
+  }
 }
 for (const c of jsClasses) {
   if (!css.includes("." + c)) fail.push(`JS 用了 class="${c}"，但 CSS 里没有样式规则`);

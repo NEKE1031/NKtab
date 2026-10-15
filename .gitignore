@@ -1,6 +1,12 @@
 # GraphFlow 工具缓存（本地生成，一直在变，不必进仓库）
 .graphflow/
 graphflow-out/
+.graphflow-cache/
+
+# 借来的临时目录（下载的库、生成的预览图等，不进项目）
+.tmp/
+
+# 给人看的样式示例页（本地打开玩的，不是扩展的一部分）
 
 # 预览图等中间产物
 tools/*.png
