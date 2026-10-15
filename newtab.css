@@ -103,6 +103,9 @@ body {
   height: 20px;
   opacity: .65;
   pointer-events: none;
+  /* 输入框在 DOM 里排在后面，又是个要画自己背景的元素，所以要显式压上去。
+     少了这句，放大镜和引擎图标会被输入框的底色盖住 —— 看着就像「没有图标」。 */
+  z-index: 2;
 }
 
 .search__input {
@@ -151,6 +154,8 @@ body {
   border-radius: 50%;
   cursor: pointer;
   transition: background .18s, color .18s, transform .18s;
+  /* 同 .search__icon：不写这句会被后面的输入框盖住 */
+  z-index: 2;
 }
 
 .engine:hover,
