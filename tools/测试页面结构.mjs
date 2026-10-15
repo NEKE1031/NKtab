@@ -65,14 +65,6 @@ const byId = (id) => find(tree, (n) => n.id === id);
 const byClass = (c) => find(tree, (n) => n.cls.split(/\s+/).includes(c));
 const classesOf = (n) => (n ? n.cls.split(/\s+/).filter(Boolean) : []);
 
-/** 某个元素及其全部后代的 tag/class 拼成文本，拿来查污染 */
-function textOf(node) {
-  if (!node) return "";
-  let out = node.tag + "." + node.cls;
-  for (const kid of node.kids) out += " " + textOf(kid);
-  return out;
-}
-
 /* ---------- 1. 背景层 ---------- */
 
 const bg = byClass("bg");
@@ -86,7 +78,7 @@ if (!bg) {
   ok.push(".bg 是 <body> 的直接子元素，在 .stage 外面");
 }
 
-
+/* ---------- 2. .stage 的构成 ---------- */
 
 const stage = byClass("stage");
 if (!stage) {
@@ -101,7 +93,6 @@ if (!stage) {
     ok.push(".stage 里正好是搜索框 + .content 两块");
   }
 }
-
 
 /* ---------- 3. 三栏 + 左右对称 ---------- */
 
