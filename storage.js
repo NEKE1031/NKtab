@@ -558,6 +558,26 @@ export async function setPanelCard(id) {
 }
 
 /* ------------------------------------------------------------------ *
+ * 搜索框用哪个搜索引擎
+ *
+ * 一个短 id（"baidu" / "bing" …），几个字节，放 sync 跟着账号走。
+ * 具体有哪些引擎、地址怎么拼，写在 newtab.js 里 —— storage 只管存个名字。
+ * ------------------------------------------------------------------ */
+
+const SEARCH_ENGINE_KEY = "nk.search.engine";
+
+/** 上次选的是哪个引擎；没存过就返回空串，由调用方决定默认值。 */
+export async function getSearchEngine() {
+  const value = await read("sync", SEARCH_ENGINE_KEY, "");
+  return typeof value === "string" ? value : "";
+}
+
+/** 记住选的引擎。 */
+export async function setSearchEngine(id) {
+  await write("sync", SEARCH_ENGINE_KEY, String(id || ""));
+}
+
+/* ------------------------------------------------------------------ *
  * 卡片自己的数据：待办 / 便签 / 倒计时 / 每日一句
  *
  * 四个键都放 sync。原因：都是纯文本，几十 KB 撑死也到不了 100KB 上限，

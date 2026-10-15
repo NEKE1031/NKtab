@@ -8,7 +8,6 @@ const css = readFileSync(DIR + "newtab.css", "utf8");
 // 除了 newtab.js，这几个也管界面，一起对账：
 //   cards.js  右边那栏五张卡片的内容
 const UI_MODULES = ["newtab", "cards"];
-
 const fail = [];
 const note = [];
 
@@ -36,7 +35,7 @@ for (const id of htmlIds) {
 console.log(`id 对账：HTML ${htmlIds.size} 个，JS 取用 ${usedIds.size} 个`);
 
 /* ---- 3. 各个模块的 export vs newtab.js 的 import ---- */
-for (const mod of ["storage", "weather"]) {
+for (const mod of ["storage", "weather", "search"]) {
   const source = readFileSync(DIR + mod + ".js", "utf8");
   const exported = new Set(
     [...source.matchAll(/export\s+(?:async\s+)?(?:function|const|let)\s+([A-Za-z_$][\w$]*)/g)]

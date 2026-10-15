@@ -13,7 +13,8 @@
 
   <main class="stage">
 
-    <!-- 搜索框：打字回车，用必应搜索（新开一个标签页） -->
+    <!-- 搜索框：打字回车，用右边选的引擎搜索（新开一个标签页）；
+         看着像网址就直接打开，不经过搜索引擎 -->
     <form class="search" id="search-form" autocomplete="off">
       <svg class="search__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -22,6 +23,18 @@
       </svg>
       <input class="search__input" id="search-input" type="text"
              placeholder="输入搜索内容" spellcheck="false" autocomplete="off">
+
+      <!-- 用哪个搜索引擎：点一下换个引擎，选过的记着 -->
+      <button class="engine" id="engine-btn" type="button"
+              aria-haspopup="listbox" aria-expanded="false" aria-label="选择搜索引擎">
+        <span class="engine__label" id="engine-label">必应</span>
+        <svg class="engine__caret" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </button>
+
+      <ul class="engine-menu" id="engine-menu" role="listbox" aria-label="搜索引擎" hidden></ul>
 
       <!-- 搜索记录：搜索框一被点开就从下面滑出来 -->
       <div class="history" id="history" hidden>

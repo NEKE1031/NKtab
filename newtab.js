@@ -43,12 +43,20 @@ import {
   ICON_COLORS,
   getPanelCard,
   setPanelCard,
+  getSearchEngine,
+  setSearchEngine,
 } from "./storage.js";
 
 import { fetchWeather, iconFor, REFRESH_AFTER } from "./weather.js";
 
 import { CARDS } from "./cards.js";
 
+
+import { ENGINES, DEFAULT_ENGINE, findEngine, targetFor } from "./search.js";
+
+/* ---------------- 搜索引擎 ---------------- */
+
+let engineId = DEFAULT_ENGINE;   // 当前用的引擎
 
 /* ---------------- 页面上的元素 ---------------- */
 
@@ -61,6 +69,9 @@ const searchInput = document.getElementById("search-input");
 const historyEl = document.getElementById("history");
 const historyListEl = document.getElementById("history-list");
 const historyClear = document.getElementById("history-clear");
+const engineBtn = document.getElementById("engine-btn");
+const engineLabel = document.getElementById("engine-label");
+const engineMenu = document.getElementById("engine-menu");
 
 const wallpaperBtn = document.getElementById("wallpaper-btn");
 const wallpaperInput = document.getElementById("wallpaper-input");
@@ -143,19 +154,15 @@ searchForm.addEventListener("submit", (event) => {
 });
 
 async function runSearch(query) {
-  if (!query) return;
-
-  // 看着像个网址就直接打开，不然才去搜索。
-  // 这样输 "github.com" 不用先搜一遍再点。
-  const target = looksLikeAddress(query)
-    ? (query.includes("://") ? query : "https://" + query)
-    : "https://www.bing.com/search?q=" + encodeURIComponent(query);
+  // 像网址就直接打开，否则用当前选的引擎搜 —— 判断和拼地址都在 search.js 里
+  const target = targetFor(query, engineId);
+  if (!target) return;
 
   openInNewTab(target);          // 先开页面（必须紧跟着点击，不然会被当成弹窗拦掉）
   searchInput.value = "";
   hideHistory();
 
-  searchHistory = await addSearchHistory(query);   // 再记账
+  searchHistory = await addSearchHistory(query.trim());   // 再记账
 }
 
 /** 新开标签页打开，当前这一页留着不动。 */
@@ -165,10 +172,124 @@ function openInNewTab(url) {
   if (!opened) location.href = url;
 }
 
-function looksLikeAddress(text) {
-  if (text.includes(" ")) return false;              // 有空格就是在搜东西
-  if (/^https?:\/\//i.test(text)) return true;
-  return /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(text);   // baidu.com 这种形状
+/* ---------------- 搜索引擎的选择菜单 ---------------- */
+
+const SVG_TICK =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<polyline points="20 6 9 17 4 12"></polyline></svg>';
+
+/** 把菜单里那几项建出来（只建一次，之后只改选中态）。 */
+function buildEngineMenu() {
+  const frag = document.createDocumentFragment();
+
+  for (const engine of ENGINES) {
+    const item = document.createElement("li");
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "engine-menu__item";
+    button.dataset.engine = engine.id;
+    button.setAttribute("role", "option");
+
+    const mark = document.createElement("span");
+    mark.className = "engine-menu__mark";
+    mark.textContent = engine.mark;
+
+    const name = document.createElement("span");
+    name.className = "engine-menu__name";
+    name.textContent = engine.name;
+
+    const tick = document.createElement("span");
+    tick.className = "engine-menu__tick";
+    tick.innerHTML = SVG_TICK;
+
+    button.append(mark, name, tick);
+    item.append(button);
+    frag.append(item);
+  }
+
+  engineMenu.replaceChildren(frag);
+}
+
+/** 把菜单和按钮画成「当前用的是哪个引擎」。 */
+function paintEngine() {
+  const engine = findEngine(engineId) || findEngine(DEFAULT_ENGINE);
+  engineLabel.textContent = engine.name;
+
+  for (const button of engineMenu.querySelectorAll(".engine-menu__item")) {
+    const on = button.dataset.engine === engine.id;
+    button.classList.toggle("engine-menu__item--on", on);
+    button.setAttribute("aria-selected", on ? "true" : "false");
+  }
+}
+
+function showEngineMenu() {
+  engineMenu.hidden = false;
+  engineBtn.setAttribute("aria-expanded", "true");
+}
+
+function hideEngineMenu() {
+  engineMenu.hidden = true;
+  engineBtn.setAttribute("aria-expanded", "false");
+}
+
+/** 换一个引擎：记下来，下次打开还是它。 */
+async function chooseEngine(id) {
+  if (!findEngine(id)) return;
+  engineId = id;
+  paintEngine();
+  hideEngineMenu();
+  searchInput.focus();
+  await setSearchEngine(id);
+}
+
+function initEnginePicker() {
+  buildEngineMenu();
+
+  // 菜单是 <ul>，点哪一项都通过冒泡在这里收口，不用给每项各挂一个监听
+  engineMenu.addEventListener("click", (event) => {
+    const button = event.target.closest(".engine-menu__item");
+    if (!button) return;
+    chooseEngine(button.dataset.engine).catch(() => {});
+  });
+
+  // 按下按钮那一瞬间 input 会先失焦（blur 会收菜单），所以按下就切换，
+  // 而不是等 click —— 否则 click 到达前菜单已经被收走了。
+  engineBtn.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    if (engineMenu.hidden) showEngineMenu();
+    else hideEngineMenu();
+  });
+
+  // 键盘：上下选、回车确认，Esc 收起来
+  engineBtn.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { hideEngineMenu(); return; }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    showEngineMenu();
+    const buttons = [...engineMenu.querySelectorAll(".engine-menu__item")];
+    if (!buttons.length) return;
+    const current = buttons.findIndex((item) => item.dataset.engine === engineId);
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    const next = buttons[(current + step + buttons.length) % buttons.length];
+    next.focus();
+  });
+
+  engineMenu.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") { hideEngineMenu(); engineBtn.focus(); }
+  });
+
+  // 点别处、或者按 Esc，都把菜单收起来
+  document.addEventListener("mousedown", (event) => {
+    if (engineMenu.hidden) return;
+    if (event.target === engineBtn || engineBtn.contains(event.target)) return;
+    if (engineMenu.contains(event.target)) return;
+    hideEngineMenu();
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !engineMenu.hidden) hideEngineMenu();
+  });
 }
 
 /* ---------------- 搜索记录面板 ---------------- */
@@ -322,6 +443,7 @@ historyClear.addEventListener("click", async () => {
 });
 
 initSearchHistoryInput();
+initEnginePicker();
 
 /* ---------------- 画色块宫格 ---------------- */
 
@@ -1516,12 +1638,20 @@ async function start() {
   await Promise.all([renderGrid(), refreshHistory()]);
   initPanel().catch((error) => console.error(error));    // 侧栏卡片，读一下存的位置，很快
   initWeather().catch((error) => console.error(error));  // 天气自己在后台拿，不挡着页面能用
+  await restoreSearchEngine();                           // 上次选的搜索引擎
   searchInput.focus();     // 打开新标签页就能直接打字
 }
 
 /** 把搜索记录从存储里读进内存。 */
 async function refreshHistory() {
   searchHistory = await getSearchHistory();
+}
+
+/** 把上次选的搜索引擎读回来画上；没存过就保持默认的必应。 */
+async function restoreSearchEngine() {
+  const saved = await getSearchEngine();
+  if (findEngine(saved)) engineId = saved;
+  paintEngine();
 }
 
 start();
