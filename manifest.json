@@ -1,8 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NKtab",
-  "version": "1.8.0",
-  "description": "简洁的新标签页：大字色块快捷方式 + 搜索框 + 搜索记录 + 天气（含逐小时）+ 36 张自带壁纸的壁纸库。",
+  "version": "1.9.0",
   "chrome_url_overrides": {
     "newtab": "newtab.html"
   },
