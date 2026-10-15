@@ -90,6 +90,10 @@ globalThis.window.open = (url) => {
   return {};
 };
 
+// 先塞一条搜索记录：搜索记录面板和引擎菜单挂在同一个位置，
+// 下面要查「开引擎菜单时会不会把记录面板收走」，得先有得弹。
+store.set("nk.history", JSON.stringify(["昨天搜过的词"]));
+
 await import("../newtab.js");
 await sleep(60); // start() 是异步的：先读存储再画，等它落定
 
@@ -166,6 +170,18 @@ expect("↑ 再往回挪一项", globalThis.__focused === itemOf("baidu"), true)
 const scrollEvent = { key: "ArrowDown", prevented: false, preventDefault() { scrollEvent.prevented = true; } };
 engineBtn.fire("keydown", scrollEvent);
 expect("↑↓ 被拦下，页面不跟着滚", scrollEvent.prevented, true);
+
+// 引擎菜单和搜索记录面板都挂在搜索框下面、位置几乎重合，
+// 所以开引擎菜单的时候得把记录面板收走，不然底下会透出来。
+const historyEl = stubs.get("history");
+input.value = "";
+input.fire("focus", {});
+await sleep(40);
+expect("有记录时聚焦会弹出记录面板", historyEl.hidden, false);
+engineMenu.hidden = true;
+engineBtn.fire("mousedown", {});
+expect("开引擎菜单就把记录面板收走", historyEl.hidden, true);
+expect("引擎菜单自己是开着的", engineMenu.hidden, false);
 
 // mousedown 是开关（不是只会打开），别依赖进它之前是什么状态
 engineMenu.hidden = false;

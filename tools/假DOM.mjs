@@ -99,12 +99,16 @@ export function makeElement(tag = "div", id = "") {
       return node[name];
     },
     focus() {
+      // 真浏览器里 focus() 会派发一个 focus 事件，页面靠它弹面板 / 让守卫位失效，
+      // 所以这里也得派发，不然测试里的状态机会比真环境停早一步。
       node.focused = true;
       globalThis.__focused = node;
       if (globalThis.document) globalThis.document.activeElement = node;
+      node.fire("focus", {});
     },
     blur() {
       node.focused = false;
+      node.fire("blur", {});
     },
     // 色块那套字宽自适应会量尺寸；假环境给个稳定值就行
     getBoundingClientRect() {
@@ -177,6 +181,10 @@ export function makeElement(tag = "div", id = "") {
       return node.fire("click", {});
     },
   };
+  // 点搜索记录里的一条会调 form.requestSubmit()，当提交处理一遍
+  if (String(tag).toLowerCase() === "form") {
+    node.requestSubmit = () => node.fire("submit", {});
+  }
   node.className = "";
   return node;
 }

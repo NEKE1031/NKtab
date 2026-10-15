@@ -224,6 +224,9 @@ function paintEngine() {
 }
 
 function showEngineMenu() {
+  // 两个面板都挂在搜索框下面、位置几乎重合：开了引擎菜单就把搜索记录先收走，
+  // 不然菜单底下会透出一条半截的记录面板。
+  hideHistory();
   engineMenu.hidden = false;
   engineBtn.setAttribute("aria-expanded", "true");
 }
