@@ -73,6 +73,7 @@ const { documentStub, stubs, store } = page;
 
 // 选引擎那三个节点得先造出来、按钮里还得真的装着那个 label，
 // 因为代码是靠 engineBtn.contains(目标) 判断「点的是不是这个按钮」的。
+// 按钮上那个记号在 HTML 里的 id 是 engine-label（内容是 B / 百 / G 这类记号）。
 const engineBtn = makeElement("button", "engine-btn");
 const engineLabel = makeElement("span", "engine-label");
 const engineMenu = makeElement("ul", "engine-menu");
@@ -108,11 +109,16 @@ const savedEngine = () => {
   return raw === undefined ? "" : JSON.parse(raw);
 };
 
+const markOf = (id) => findEngine(id).mark;
+
 console.log("");
 console.log("搜索引擎选择菜单：");
 
 expect("菜单里有几个引擎", items().length, ENGINES.length);
-expect("按钮上写的是默认引擎", engineLabel.textContent, "必应");
+// 按钮上只放一个记号（G / 百 / 哔），不是引擎全名
+expect("按钮上写的是默认引擎的记号", engineLabel.textContent, markOf(DEFAULT_ENGINE));
+expect("全名挂在 title 上", /必应/.test(engineBtn.title), true);
+expect("全名也挂进了 aria-label", /必应/.test(engineBtn.getAttribute("aria-label")), true);
 expect("默认选中的就是必应", onIds().join(","), "bing");
 expect("一开始菜单是收着的", engineMenu.hidden, true);
 
@@ -125,7 +131,8 @@ expect("按钮上的展开状态跟着改", engineBtn.getAttribute("aria-expande
 itemOf("baidu").fire("click", {});
 await sleep(40);
 
-expect("按钮上换成百度", engineLabel.textContent, "百度");
+expect("按钮上换成百度的记号", engineLabel.textContent, markOf("baidu"));
+expect("title 也跟着换", /百度/.test(engineBtn.title), true);
 expect("选中的只有百度", onIds().join(","), "baidu");
 expect("存下了百度", savedEngine(), "baidu");
 expect("选完菜单自己收起来", engineMenu.hidden, true);
@@ -133,7 +140,7 @@ expect("选完菜单自己收起来", engineMenu.hidden, true);
 // 再选 Google
 itemOf("google").fire("click", {});
 await sleep(40);
-expect("换成 Google", engineLabel.textContent, "Google");
+expect("换成 Google 的记号", engineLabel.textContent, markOf("google"));
 expect("存下了 google", savedEngine(), "google");
 
 // 换了引擎之后，输入框回车真的去搜那个引擎
@@ -199,7 +206,7 @@ expect("Esc 收起来", engineMenu.hidden, true);
 store.set("nk.search.engine", JSON.stringify("没有这个引擎"));
 await reloadNewtab();
 await sleep(60);
-expect("存了个不认识的引擎 -> 退回必应", engineLabel.textContent, "必应");
+expect("存了个不认识的引擎 -> 退回必应", engineLabel.textContent, markOf(DEFAULT_ENGINE));
 expect("退回之后选中的也是必应", onIds().join(","), "bing");
 
 /* ---------------- 结果 ---------------- */

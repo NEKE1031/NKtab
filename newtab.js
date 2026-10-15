@@ -214,7 +214,10 @@ function buildEngineMenu() {
 /** 把菜单和按钮画成「当前用的是哪个引擎」。 */
 function paintEngine() {
   const engine = findEngine(engineId) || findEngine(DEFAULT_ENGINE);
-  engineLabel.textContent = engine.name;
+  // 按钮上只放一个记号（G / 百 / 哔），全名挂在 title 和 aria-label 上
+  engineLabel.textContent = engine.mark;
+  engineBtn.title = `搜索引擎：${engine.name}`;
+  engineBtn.setAttribute("aria-label", `选择搜索引擎（现在是${engine.name}）`);
 
   for (const button of engineMenu.querySelectorAll(".engine-menu__item")) {
     const on = button.dataset.engine === engine.id;
