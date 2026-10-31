@@ -1,12 +1,12 @@
 """生成 README 里用的说明图（不是截图 —— 沙箱里起不了浏览器，没法截真图）。
 
-图都按 newtab.css 里的真实数值画：色块 132x74、间距 20/22、左边卡片 248 宽、
+图都按 newtab.css 里的真实数值画：色块 132x74、间距 20/22、左右两栏 248 宽、
 圆角 16/18、毛玻璃 rgba(18,22,32,.52)、搜索框宽 620 高 52。站点名字和颜色
 是手抄 storage.js 里 DEFAULT_BOOKMARKS 的 d01~d12，不是编的；改预置时记得同步这里。
 
 产物在 docs/ 下：
   01-整页.png          整页长什么样（带 1~5 标注）
-  02-卡片轮播.png      右边那栏五张卡片都长什么样
+  02-浏览历史.png      右边那栏的浏览历史，六处逐一说明
   03-搜索选引擎.png    点搜索框左边的图标换引擎
   04-添加网站.png      色块右上角的编辑/删除 + 添加网站的小窗
   05-壁纸库.png        右下角「换背景」里的小图墙
@@ -165,28 +165,68 @@ def draw_weather(base, d, box):
         text(d, (bx + 20, y + h - 23), label, 10, False, "mm", (255, 255, 255, 200))
 
 
-def draw_panel(base, d, box, current="待办"):
-    """右上角那一栏（只画当前这一张）。"""
+def draw_panel(base, d, box, hover_row=1):
+    """右上角那一栏：浏览历史（只画一屏）。
+
+    hover_row 指定哪一条画成「鼠标停在上面」的样子（底色亮一点 + 右边出 ×），
+    传 None 就都不带。返回每一条的中心 y（绝对值），好让外面的编号点得着。
+    """
     x, y = box
     w, h = SIDE_W, 430
     glass(base, (x, y, x + w, y + h), 18)
-    text(d, (x + 18, y + 26), current, 14, True, "lm", (255, 255, 255, 240))
-    for i, ch in enumerate(("‹", "›")):
-        cx = x + w - 46 + i * 26
-        circle(base, cx, y + 26, 11, (255, 255, 255, 34))
-        text(d, (cx, y + 26), ch, 14, True, "mm", (255, 255, 255, 235))
 
-    if current == "待办":
-        text(d, (x + 18, y + 64), "要做的事", 12, False, "lm", (255, 255, 255, 170))
-        text(d, (x + 18, y + 106), "还没有要做的事", 13, False, "lm", (255, 255, 255, 200))
-        rrect(base, (x + 18, y + h - 78, x + w - 18, y + h - 46), 12, (255, 255, 255, 30))
-        text(d, (x + 30, y + h - 62), "加一件要做的事，回车", 12, False, "lm", (255, 255, 255, 165))
-    for i in range(5):
-        cx = x + w / 2 - 22 + i * 11
-        circle(base, cx, y + h - 22, 3, (255, 255, 255, 235 if current == "待办" and i == 1 else 90))
+    # 顶栏：小闹钟 + 历史记录 + 刷新
+    blend(base, (x + 12, y + 16, x + 32, y + 36),
+          lambda dd, b: (dd.ellipse((x + 17, y + 20, x + 27, y + 31), outline=(255, 255, 255, 220), width=2),
+                         dd.line([(x + 22, y + 23), (x + 22, y + 26)], fill=(255, 255, 255, 220), width=2)))
+    text(d, (x + 40, y + 26), "历史记录", 14, True, "lm", (255, 255, 255, 240))
+    circle(base, x + w - 30, y + 26, 11, (255, 255, 255, 34))
+    blend(base, (x + w - 40, y + 16, x + w - 20, y + 36),
+          lambda dd, b: (dd.arc((x + w - 37, y + 19, x + w - 23, y + 33), 40, 320,
+                                fill=(255, 255, 255, 235), width=2),
+                         dd.polygon([(x + w - 23, y + 18), (x + w - 21, y + 24), (x + w - 27, y + 22)],
+                                    fill=(255, 255, 255, 235))))
 
-    # 自动翻页的小注解
-    text(d, (x + w / 2, y + h + 16), "每 3 分钟自己翻一张", 11, False, "mm", (255, 255, 255, 170))
+    # 过滤框
+    rrect(base, (x + 16, y + 46, x + w - 16, y + 72), 10, (255, 255, 255, 26))
+    magnifier(base, x + 30, y + 59, 5)
+    text(d, (x + 42, y + 59), "在历史里找", 11, False, "lm", (255, 255, 255, 130))
+
+    # 列表：两组，每组一个日期头 + 两三条
+    rows = [
+        ("今天", [("B", "某个有意思的视频", "www.bilibili.com · 14:02", (250, 114, 154)),
+                  ("G", "NEKE1031/NKtab", "github.com · 11:47", (88, 101, 242)),
+                  ("百", "百度一下，你就知道", "www.baidu.com · 09:15", (43, 120, 241))]),
+        ("昨天", [("知", "如何评价新的新标签页", "www.zhihu.com · 22:31", (0, 102, 255)),
+                  ("M", "机器学习速成课程", "developers.google.cn · 16:08", (234, 67, 53))]),
+    ]
+    ty = y + 84
+    centers = []
+    for day, items in rows:
+        text(d, (x + 16, ty), day, 11, True, "lm", (255, 255, 255, 150))
+        ty += 18
+        for letter, title, meta, color in items:
+            hot = hover_row is not None and len(centers) == hover_row
+            rrect(base, (x + 12, ty, x + w - 12, ty + 38), 10,
+                  (255, 255, 255, 38) if hot else (255, 255, 255, 18))
+            rrect(base, (x + 20, ty + 8, x + 42, ty + 30), 7, color + (235,))
+            text(d, (x + 31, ty + 19), letter, 11, True, "mm", (255, 255, 255, 245))
+            text(d, (x + 50, ty + 14), title, 11, True, "lm", (255, 255, 255, 235))
+            text(d, (x + 50, ty + 28), meta, 9, False, "lm", (255, 255, 255, 140))
+            if hot:
+                cross(base, x + w - 24, ty + 19, 4, (255, 220, 220, 240))
+            centers.append(ty + 19)
+            ty += 44
+        ty += 6
+
+    # 底部：条数 + 清空
+    text(d, (x + 16, y + h - 20), "23 条", 10, False, "lm", (255, 255, 255, 140))
+    rrect(base, (x + w - 62, y + h - 32, x + w - 12, y + h - 10), 9, (255, 255, 255, 26))
+    text(d, (x + w - 37, y + h - 21), "清空", 10, False, "mm", (255, 255, 255, 200))
+
+    # 注解
+    text(d, (x + w / 2, y + h + 16), "按天分组，最新的在最上面", 11, False, "mm", (255, 255, 255, 170))
+    return centers
 
 
 def pencil(base, cx, cy, color=(255, 255, 255, 235)):
@@ -279,7 +319,7 @@ def page_shot():
         (sx + sw / 2, sy + 6, "1", "搜索框：打字回车；左上角小圆是换引擎的"),
         (left + SIDE_W / 2, content_top - 4, "2", "天气卡片：换城市 / 刷新"),
         (tiles_x + 4 * (TILE_W + GAP_X), content_top - 4, "3", "色块：点开网站；右上角能改能删；拖着能换顺序"),
-        (left + 1500 - SIDE_W / 2, content_top - 4, "4", "卡片栏：5 张卡片左右切换，3 分钟自己翻一张"),
+        (left + 1500 - SIDE_W / 2, content_top - 4, "4", "浏览历史：按天分组，点一条就打开"),
         (W - 92, H - 78, "5", "换背景 / 壁纸库"),
     ]
     for mx, my, num, label in marks:
@@ -295,93 +335,54 @@ def page_shot():
     return base.convert("RGB")
 
 
-# ============================ 2. 五张卡片 ============================
+# ============================ 2. 浏览历史 ============================
 
 def panel_shot():
-    W, H = 1500, 660
+    W, H = 1300, 640
     base = Image.new("RGBA", (W, H), (16, 20, 30, 255))
     d = ImageDraw.Draw(base)
 
-    text(d, (40, 34), "右边那一栏：五张卡片，一次只露一张", 20, True, "la", (255, 255, 255, 240))
-    text(d, (40, 64), "左右箭头 / 底下圆点 / 键盘 ← → / 鼠标横拖 都能换；鼠标停在里面它就不自动翻了",
-         13, False, "la", (255, 255, 255, 160))
+    text(d, (40, 34), "右边那一栏：你的浏览历史", 20, True, "la", (255, 255, 255, 240))
+    text(d, (40, 64), "新开标签页就能看见；只读本地历史，不上传任何东西", 13, False, "la",
+         (255, 255, 255, 160))
 
-    names = ["日历", "待办", "便签", "倒计时", "每日一句"]
-    pw, ph = SIDE_W, 430
-    gap = (W - 80 - pw * 5) // 4
-    top = 110
+    px, py = 170, 110
+    centers = draw_panel(base, d, (px, py))
 
-    for i, name in enumerate(names):
-        x = 40 + i * (pw + gap)
-        glass(base, (x, top, x + pw, top + ph), 18, alpha=255, edge=34)
-        text(d, (x + 18, top + 26), name, 14, True, "lm", (255, 255, 255, 240))
-        for k, ch in enumerate(("‹", "›")):
-            circle(base, x + pw - 46 + k * 26, top + 26, 11, (255, 255, 255, 34))
-            text(d, (x + pw - 46 + k * 26, top + 26), ch, 14, True, "mm", (255, 255, 255, 235))
+    # 编号点放在面板两侧的空白里，再用一根细线指过去 —— 别压在内容上
+    # (编号, 点在哪一边, 目标 x, 目标 y)
+    marks = [
+        ("1", "right", px + SIDE_W - 30, py + 26),
+        ("2", "left", px + 60, py + 59),
+        ("3", "left", px + 18, py + 84),
+        ("4", "left", px + 31, centers[0]),
+        ("5", "right", px + SIDE_W - 24, centers[1]),
+        ("6", "right", px + SIDE_W - 37, py + 430 - 21),
+    ]
+    for num, side, tx, ty in marks:
+        mx = 120 if side == "left" else 442
+        blend(base, (min(mx, tx) - 2, ty - 2, max(mx, tx) + 2, ty + 2),
+              lambda dd, b, mx=mx, tx=tx, ty=ty: dd.line([(mx, ty), (tx, ty)],
+                                                         fill=(255, 255, 255, 90), width=1))
+        circle(base, mx, ty, 10, (229, 72, 77, 245))
+        text(d, (mx, ty), num, 12, True, "mm", (255, 255, 255, 255))
 
-        if name == "日历":
-            text(d, (x + 18, top + 62), "今天", 12, False, "lm", (255, 255, 255, 150))
-            text(d, (x + 18, top + 92), "10 月 15 日", 24, True, "lm", (255, 255, 255, 245))
-            text(d, (x + 18, top + 118), "农历九月初五 · 周四", 12, False, "lm", (255, 255, 255, 190))
-            rrect(base, (x + 18, top + 132, x + 84, top + 154), 11, (229, 72, 77, 220))
-            text(d, (x + 51, top + 143), "无节日", 11, False, "mm", (255, 255, 255, 240))
-            text(d, (x + 18, top + 172), "2026 年 10 月", 12, False, "lm", (255, 255, 255, 200))
-            grid_top = top + 192
-            for col, label in enumerate(("一", "二", "三", "四", "五", "六", "日")):
-                cx = x + 24 + col * 31
-                text(d, (cx, grid_top), label, 10, False, "mm", (255, 150, 150, 230) if col >= 5 else (255, 255, 255, 150))
-            day = 1
-            for row in range(5):
-                for col in range(7):
-                    if day > 31:
-                        break
-                    cx, cy = x + 24 + col * 31, grid_top + 26 + row * 34
-                    if day == 15:
-                        rrect(base, (cx - 14, cy - 14, cx + 14, cy + 14), 8, (255, 255, 255, 42))
-                    text(d, (cx, cy - 4), str(day), 11, (day == 15), "mm", (255, 255, 255, 240))
-                    text(d, (cx, cy + 8), "初" + "一二三四五六七八九十"[(day - 1) % 10], 8, False, "mm",
-                         (255, 255, 255, 120))
-                    day += 1
-        elif name == "待办":
-            text(d, (x + 18, top + 62), "要做的事", 12, False, "lm", (255, 255, 255, 150))
-            for k, (task, done) in enumerate((("给妈妈打电话", True), ("改一下色块顺序", False), ("交电费", False))):
-                ty = top + 98 + k * 34
-                circle(base, x + 26, ty, 7, (255, 255, 255, 40) if not done else (70, 167, 88, 230))
-                if done:
-                    check_mark(base, x + 26, ty, 4)
-                text(d, (x + 42, ty), task, 12, False, "lm", (255, 255, 255, 120) if done else (255, 255, 255, 235))
-            rrect(base, (x + 18, top + ph - 78, x + pw - 18, top + ph - 46), 12, (255, 255, 255, 30))
-            text(d, (x + 30, top + ph - 62), "加一件要做的事，回车", 12, False, "lm", (255, 255, 255, 165))
-        elif name == "便签":
-            text(d, (x + 18, top + 62), "随手记", 12, False, "lm", (255, 255, 255, 150))
-            rrect(base, (x + 18, top + 82, x + pw - 18, top + ph - 76), 12, (255, 255, 255, 24))
-            for k, line in enumerate(("明天 10:00 体检，","记得空腹。","", "把壁纸换成 bing3")):
-                text(d, (x + 30, top + 100 + k * 22), line, 12, False, "la", (255, 255, 255, 225))
-            text(d, (x + 18, top + ph - 52), "停手一会儿自动保存", 11, False, "lm", (255, 255, 255, 150))
-            text(d, (x + pw - 18, top + ph - 52), "已保存 16:24:31", 10, False, "rm", (255, 255, 255, 130))
-        elif name == "倒计时":
-            text(d, (x + 18, top + 62), "纪念日", 12, False, "lm", (255, 255, 255, 150))
-            rows = (("生日", "2027-02-17", "还有 125 天"), ("出发去玩", "2026-10-17", "后天"),
-                    ("入职纪念日", "2024-09-01", "已经过了 774 天"))
-            for k, (label, date, left) in enumerate(rows):
-                ty = top + 92 + k * 52
-                rrect(base, (x + 18, ty, x + pw - 18, ty + 44), 12, (255, 255, 255, 24))
-                text(d, (x + 30, ty + 14), label, 12, True, "lm", (255, 255, 255, 235))
-                text(d, (x + 30, ty + 31), date, 10, False, "lm", (255, 255, 255, 140))
-                text(d, (x + pw - 30, ty + 22), left, 12, True, "rm", (255, 220, 140, 240) if k == 1 else (255, 255, 255, 220))
-            rrect(base, (x + 18, top + ph - 78, x + pw - 18, top + ph - 46), 12, (255, 255, 255, 30))
-            text(d, (x + 30, top + ph - 62), "+ 添一个日子", 12, False, "lm", (255, 255, 255, 165))
-        else:
-            text(d, (x + 24, top + 80), "“", 34, True, "la", (255, 255, 255, 90))
-            for k, line in enumerate(("先把今天过好，", "明天的事明天再说。")):
-                text(d, (x + 34, top + 116 + k * 26), line, 14, False, "la", (255, 255, 255, 235))
-            text(d, (x + 18, top + ph - 52), "2026-10-15 · 第 1 句", 11, False, "lm", (255, 255, 255, 140))
-            rrect(base, (x + pw - 86, top + ph - 64, x + pw - 18, top + ph - 40), 10, (255, 255, 255, 32))
-            text(d, (x + pw - 52, top + ph - 52), "换一句", 11, False, "mm", (255, 255, 255, 220))
-
-        for k in range(5):
-            cx = x + pw / 2 - 22 + k * 11
-            circle(base, cx, top + ph - 22, 3, (255, 255, 255, 235 if k == i else 90))
+    # 右边的说明
+    lines = [
+        ("1", "顶栏：标题 + 刷新按钮", "外面又看了新页面，点一下圆圈箭头就重新读"),
+        ("2", "过滤框：打两个字就筛", "标题 / 域名 / 网址都算，多个词要都命中"),
+        ("3", "按天分组", "今天、昨天，再往前就写 10月30日 / 2025年3月8日"),
+        ("4", "一条 = 首字母方块 + 标题 + 域名·时间", "方块颜色跟域名绑定，同一个站永远同色"),
+        ("5", "鼠标移上去，右边出 ×", "点一下只删这一条（浏览器历史里也真删）"),
+        ("6", "底部：多少条 + 清空", "清空要点两下，第一下只是问一句"),
+    ]
+    ly = 130
+    for num, head, tail in lines:
+        circle(base, 484, ly + 6, 10, (229, 72, 77, 245))
+        text(d, (484, ly + 6), num, 12, True, "mm", (255, 255, 255, 255))
+        text(d, (504, ly), head, 13, True, "lm", (255, 255, 255, 238))
+        text(d, (504, ly + 20), tail, 11, False, "lm", (255, 255, 255, 150))
+        ly += 56
 
     text(d, (W / 2, H - 26), "图是按 newtab.css 的真实数值画的示意图，不是截屏", 11, False, "mm",
          (255, 255, 255, 130))
@@ -573,7 +574,7 @@ def main():
     OUT_DIR.mkdir(exist_ok=True)
     jobs = [
         ("01-整页.png", page_shot),
-        ("02-卡片轮播.png", panel_shot),
+        ("02-浏览历史.png", panel_shot),
         ("03-搜索选引擎.png", engine_shot),
         ("04-添加网站.png", tile_shot),
         ("05-壁纸库.png", wallpaper_shot),

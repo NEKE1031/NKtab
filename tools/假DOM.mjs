@@ -1,7 +1,7 @@
 /**
  * 假DOM.mjs —— 给浏览器专用模块搭一套最小的假 DOM / 假 localStorage。
  *
- * tools\测试侧栏轮播.mjs 和 tools\测试搜索.mjs 都用它；早些时候每个脚本各自内联
+ * tools\测试历史记录.mjs 和 tools\测试搜索.mjs 都用它；早些时候每个脚本各自内联
  * 过一份，这个文件是把那份抽出来复用：newtab.js import 进来就会自己跑 start()，
  * 所以要在 import **之前**先把 document / window / localStorage 顶掉。
  *
@@ -239,6 +239,55 @@ export function setWallpaperFiles(paths) {
   };
 }
 
+/**
+ * 装一个假的 chrome.history，让 history.js 的 loadRecent / forgetUrl / forgetAll 能跑。
+ *
+ * visits 的每一项照 chrome.history.HistoryItem 的形状给：
+ *   { url, title, lastVisitTime, visitCount }
+ *
+ * 删是真删（数组里拿掉），所以「删完再读一遍」这种测试能测到位。
+ * 另外 search 故意**按原样顺序**给回来，不帮忙排序 —— history.js 自己的
+ * sortRecent 得真的干活，测试才测得出它写没写对。
+ */
+export function setBrowserHistory(visits) {
+  const items = (Array.isArray(visits) ? visits : []).map((item) => ({ ...item }));
+
+  const history = {
+    search: (query, callback) => {
+      const max = Number((query && query.maxResults) || 0) || items.length;
+      const found = items.slice(0, max).map((item) => ({ ...item }));
+      if (typeof callback === "function") callback(found);
+      return Promise.resolve(found);
+    },
+    deleteUrl: ({ url }, callback) => {
+      const at = items.findIndex((item) => item.url === url);
+      if (at >= 0) items.splice(at, 1);
+      if (typeof callback === "function") callback();
+      return Promise.resolve();
+    },
+    deleteAll: (callback) => {
+      items.length = 0;
+      if (typeof callback === "function") callback();
+      return Promise.resolve();
+    },
+  };
+
+  globalThis.chrome = {
+    ...(globalThis.chrome || {}),
+    history,
+  };
+
+  return {
+    items,
+    left: () => items.length,
+  };
+}
+
+/** 把假 chrome.history 拿掉，用来测「读不到历史记录」那条路。 */
+export function removeBrowserHistory() {
+  if (globalThis.chrome) delete globalThis.chrome.history;
+}
+
 /** 把整个页面环境顶好：document / window / localStorage / rAF 全套。 */
 export function mountFakePage() {
   const documentStub = { listeners: {}, activeElement: null };
@@ -257,7 +306,6 @@ export function mountFakePage() {
   documentStub.createTextNode = (text) => ({ nodeType: 3, textContent: text });
 
   // 按 class 找：newtab.js 里 document.querySelector(".panel") 要拿到整个右侧栏
-  // （自动翻页往它身上挂 mouseenter / mouseleave）
   const byClass = new Map();
   documentStub.querySelector = (selector) =>
     selector.startsWith(".") ? byClass.get(selector.slice(1)) || null : null;
@@ -265,11 +313,18 @@ export function mountFakePage() {
 
   // newtab.js 一开始就会找这几块并挂监听，先造出来
   for (const [id, tag] of [
-    ["history", "div"],
+    ["history", "div"],           // 搜索记录（搜索框上面那个下拉）
     ["history-list", "ul"],
     ["history-clear", "button"],
     ["search-input", "input"],
     ["search-form", "form"],
+    // 右边那一栏：浏览历史
+    ["recent-refresh", "button"],
+    ["recent-filter", "input"],
+    ["recent-view", "div"],
+    ["recent-list", "ul"],
+    ["recent-count", "span"],
+    ["recent-clear", "button"],
   ]) {
     stubs.set(id, makeElement(tag, id));
   }

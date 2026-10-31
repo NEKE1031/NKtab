@@ -7,8 +7,7 @@
  *   3. 加 / 删 / 改网站（改名字、改网址、改颜色）
  *   4. 按住色块拖动能调整顺序
  *   5. 换背景图
- *   6. 右边那一栏里的卡片轮播（左右箭头 / 圆点 / 键盘 ←→ / 横滑换卡片，
- *      没人碰的时候每三分钟自己翻一张）
+ *   6. 右边那一栏的浏览历史（按天分组的列表，点一条打开，能过滤、能单删、能清空）
  */
 
 import {
@@ -42,15 +41,23 @@ import {
   hostOf,
   colorForName,
   ICON_COLORS,
-  getPanelCard,
-  setPanelCard,
   getSearchEngine,
   setSearchEngine,
 } from "./storage.js";
 
 import { fetchWeather, iconFor, REFRESH_AFTER } from "./weather.js";
 
-import { CARDS } from "./cards.js";
+import {
+  MAX_ITEMS,
+  clockText,
+  entryTitle,
+  forgetAll,
+  forgetUrl,
+  groupByDay,
+  letterOf,
+  loadRecent,
+  pickItems,
+} from "./history.js";
 
 import { ENGINES, DEFAULT_ENGINE, findEngine, targetFor } from "./search.js";
 
@@ -124,14 +131,13 @@ const cityInput = document.getElementById("city-input");
 const cityCancel = document.getElementById("city-cancel");
 const cityError = document.getElementById("city-error");
 
-const panelIcon = document.getElementById("panel-icon");
-const panelName = document.getElementById("panel-name");
-const panelPrev = document.getElementById("panel-prev");
-const panelNext = document.getElementById("panel-next");
-const panelView = document.getElementById("panel-view");
-const panelTrack = document.getElementById("panel-track");
-const panelDots = document.getElementById("panel-dots");
-const panel = document.querySelector(".panel");   // 整个右侧栏（自动翻页要靠它判断鼠标在不在里面）
+const recentRefresh = document.getElementById("recent-refresh");
+const recentFilter = document.getElementById("recent-filter");
+const recentView = document.getElementById("recent-view");
+const recentList = document.getElementById("recent-list");
+const recentCount = document.getElementById("recent-count");
+const recentClear = document.getElementById("recent-clear");
+const panel = document.querySelector(".panel");   // 整个右侧栏
 
 /* ---------------- 内存里的状态 ---------------- */
 
@@ -1394,386 +1400,218 @@ function toast(message) {
   }, 2200);
 }
 
-/* ---------------- 右边那一栏：卡片轮播 ---------------- */
+/* ---------------- 右边那一栏：浏览历史 ---------------- */
 
 /**
- * 这一栏里有哪些卡片。
+ * 这一栏读的是**浏览器自己的**浏览历史（chrome.history），跟搜索框下面的
+ * 「搜索记录」完全是两回事，名字像得离谱，改代码时留神别拿错：
  *
- * 每张卡片就是一条：
- *   id        认人的名字，也是存进存储里的值。改了就相当于换了张新卡片
- *   name      顶栏上显示的名字
- *   icon      顶栏上那个小图标
- *   hint      还没做的卡片，占位框里那两行字
- *   get        去 cards.js 里取真正的卡片实现（有 mount / unmount）
+ *   搜索记录  searchHistory   在本页搜索框里打过的字，存在 chrome.storage
+ *   历史记录  recentItems     浏览器记的账，只读 —— 我们一个字都不存
  *
- * 为什么用 get 而不是直接写 mount：cards.js 里那五张卡片会用到 lunar.js、
- * storage.js 一堆东西，而这个文件只该管「轮播怎么转」。用 get 的好处是
- * 卡片实现是**第一次真的切到它**才去拿的，也不用在这儿 import 一堆具体函数。
- *
- * box 是挂载时现发的，卡片自己不用管、也别存；写 mount 的时候直接拿参数。
- *
- * ⚠️ id 一改，用户之前停在哪张就认不出来了，会被兜回第一张（不报错）。
+ * 数据这些活儿（排序、分组、过滤、跟 chrome.history 对话）都在 history.js 里，
+ * 这里只管画和点。
  */
-const PANEL_SLIDES = [
-  { id: "calendar", name: "日历", icon: "🗓", get: () => CARDS.calendar },
-  { id: "todo", name: "待办", icon: "✅", get: () => CARDS.todo },
-  { id: "memo", name: "便签", icon: "📝", get: () => CARDS.memo },
-  { id: "countdown", name: "倒计时", icon: "⏳", get: () => CARDS.countdown },
-  { id: "quote", name: "每日一句", icon: "💬", get: () => CARDS.quote },
-];
 
-let panelIndex = 0;        // 现在露的是第几张（0 起）
-let panelMounted = null;   // 已经挂上的那张卡片
-let panelSwitching = false; // 正在做切换动画，这期间不再接新的切换
+let recentItems = [];        // 读回来的全部条目（已排好序、清洗过）
+let recentKeyword = "";      // 过滤框里打了什么
+let recentState = "idle";    // idle / ok / no-api / error
 
-/**
- * 没人碰的时候，每隔这么久自动翻到下一张。
- *
- * 想改快改慢就改这个数（毫秒）：三分钟 = 3 * 60 * 1000。
- * 只留一张卡片时它自己不转（转了也还是同一张）。
- */
-const PANEL_AUTOPLAY_MS = 3 * 60 * 1000;
+/** 读不到历史时显示什么。no-api 和 error 是两种不同的毛病，别合成一句。 */
+const RECENT_TIP = {
+  "no-api": "读不到浏览器历史记录。扩展少了 history 权限，去 edge://extensions/ 里重新加载一下。",
+  error: "读历史记录出错了，点右上角那个圈再试一次。",
+};
 
-let panelTimer = null;      // 自动翻页的定时器，暂停时是 null
-
-/** 不管传进来什么，都折回 0 ~ 总数-1 的范围里（负数、超界都行）。 */
-function wrapIndex(index) {
-  const total = PANEL_SLIDES.length;
-  return ((index % total) + total) % total;
-}
-
-/** 除了键盘，别的操作都在滑动中再按也没意义，先挡掉。 */
-function panelBusy() {
-  return panelSwitching || panelTrack.classList.contains("panel__track--dragging");
-}
-
-/** 把整条栏杆挪到第 index 张。 */
-function paintPanel(index) {
-  panelTrack.style.transform = `translateX(${-index * 100}%)`;
-}
-
-/** 顶栏的图标 / 名字、圆点的亮暗，跟着当前这张走。 */
-function paintPanelHead() {
-  const slide = PANEL_SLIDES[panelIndex];
-  panelIcon.textContent = slide.icon || "";
-  panelName.textContent = slide.name;
-
-  [...panelDots.children].forEach((dot, i) => {
-    dot.classList.toggle("panel__dot--on", i === panelIndex);
-    dot.setAttribute("aria-selected", i === panelIndex ? "true" : "false");
-  });
+/** 一条提示（空列表、读不到、没匹配上，都用它） */
+function recentTip(message) {
+  const tip = document.createElement("li");
+  tip.className = "recent__tip";
+  tip.textContent = message;
+  return tip;
 }
 
 /**
- * 换到第 index 张。
+ * 画一条。
  *
- * 卡片数据各归各的，所以这里只做三件事：把上一张收尾、把这一张挂上、
- * 记住看到哪儿了。setPanelCard 是异步的（可能走 chrome.storage），
- * 但界面不等它 —— 存丢了顶多下次回到第一张，不至于卡住。
+ * 小方块里放域名首字母，底色直接用预置网站那套配色（colorForName）——
+ * 同一个域名在色块区和这里永远同一个颜色，眼睛认得出来。
  */
-function showPanelSlide(index, { animate = true, byUser = true } = {}) {
-  const total = PANEL_SLIDES.length;
-  if (!total) return;
+function paintRecentRow(item) {
+  const row = document.createElement("li");
+  row.className = "recent__item";
+  row.dataset.url = item.url;
 
-  const next = wrapIndex(index);
-  if (next === panelIndex && animate) return;
+  const hit = document.createElement("button");
+  hit.type = "button";
+  hit.className = "recent__hit";
+  hit.title = item.url;          // 鼠标停上去能看到完整网址
 
-  const previous = panelMounted;
-  const slide = PANEL_SLIDES[next];
-  const box = slide.box;
+  const avatar = document.createElement("span");
+  avatar.className = "recent__avatar";
+  avatar.textContent = letterOf(item.url);
+  avatar.style.background = colorForName(item.host || item.url);
 
-  panelIndex = next;
+  const text = document.createElement("span");
+  text.className = "recent__text";
 
-  if (!box) {
-    console.error("[NKtab] 卡片还没建出节点：", slide.id);
+  const title = document.createElement("span");
+  title.className = "recent__title";
+  title.textContent = entryTitle(item);
+
+  const meta = document.createElement("span");
+  meta.className = "recent__meta";
+  // 本地文件没有域名，别显示成一片空白
+  meta.textContent = `${item.host || "本地文件"} · ${clockText(item.lastVisitTime)}`;
+
+  text.append(title, meta);
+  hit.append(avatar, text);
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "recent__del";
+  del.textContent = "×";
+  del.title = "从历史记录里删掉这条";
+  del.setAttribute("aria-label", "删掉这条历史记录");
+
+  row.append(hit, del);
+  return row;
+}
+
+/** 把现在的 recentItems 和过滤词画出来。 */
+function paintRecent() {
+  const shown = recentState === "ok" ? pickItems(recentItems, recentKeyword) : [];
+  const frag = document.createDocumentFragment();
+
+  if (recentState !== "ok") {
+    frag.append(recentTip(RECENT_TIP[recentState] || RECENT_TIP.error));
+  } else if (!shown.length) {
+    frag.append(recentTip(recentKeyword ? "没有匹配的条目" : "还没有浏览记录"));
+  } else {
+    for (const group of groupByDay(shown)) {
+      const head = document.createElement("li");
+      head.className = "recent__day";
+      head.textContent = group.label;
+      frag.append(head);
+      for (const item of group.items) frag.append(paintRecentRow(item));
+    }
+  }
+
+  recentList.replaceChildren(frag);
+
+  if (recentState !== "ok") {
+    recentCount.textContent = "";
+  } else if (recentKeyword) {
+    recentCount.textContent = `${shown.length} / ${recentItems.length} 条`;
+  } else {
+    recentCount.textContent = `${recentItems.length} 条`;
+  }
+}
+
+/** 读一遍历史记录再重画。刷新按钮和打开页面都走这里。 */
+async function refreshRecent() {
+  const result = await loadRecent({ max: MAX_ITEMS });
+  recentState = result.ok ? "ok" : result.reason || "error";
+  recentItems = result.ok ? result.items : [];
+  if (!result.ok && result.message) console.warn("读历史记录失败：", result.message);
+  paintRecent();
+}
+
+/** 删掉一条。 */
+async function dropRecent(row) {
+  const url = row.dataset.url;
+  if (!url) return;
+
+  const before = recentItems;
+  recentItems = recentItems.filter((item) => item.url !== url);   // 先从画面上拿掉，手快
+  paintRecent();
+
+  const ok = await forgetUrl(url);
+  if (ok) {
+    toast("已从历史记录里删掉");
     return;
   }
 
-  // 卡片实现第一次切到它的时候才去拿，拿不到（id 写错之类）就当没有
-  if (!slide.impl) {
-    try {
-      slide.impl = (slide.get && slide.get()) || null;
-    } catch (error) {
-      console.error("[NKtab] 卡片实现取不到：", slide.id, error);
-      slide.impl = null;
-    }
-  }
-  const impl = slide.impl;
-
-  // 该收尾的先把定时器 / 请求收干净，再挂新的
-  if (previous && previous !== slide && previous.impl && previous.impl.unmount && previous.box) {
-    try {
-      previous.impl.unmount(previous.box);
-    } catch (error) {
-      console.error("[NKtab] 卡片收尾出错：", previous.id, error);
-    }
-  }
-
-  // 卡片自己画的画，只在第一次挂上去时画一遍；之后切回来就复用它
-  if (impl && impl.mount && !slide.mounted) {
-    try {
-      slide.filled = true;
-      impl.mount(box, { toast });
-      slide.mounted = true;
-    } catch (error) {
-      console.error("[NKtab] 卡片挂载出错：", slide.id, error);
-    }
-  }
-
-  // 还没写的卡片：空壳里放一块虚线框，免得一片空白让人以为坏了
-  if (!impl && !slide.filled) {
-    box.replaceChildren();
-    const holder = document.createElement("div");
-    holder.className = "slide-holder";
-
-    const plus = document.createElement("span");
-    plus.className = "slide-holder__plus";
-    plus.textContent = "＋";
-
-    const hint = document.createElement("span");
-    hint.className = "slide-holder__hint";
-    hint.innerHTML = slide.hint || "还没做";
-
-    holder.append(plus, hint);
-    box.append(holder);
-    slide.filled = true;
-  }
-
-  panelMounted = slide;
-  panelSwitching = animate && total > 1;
-
-  if (!animate) {
-    // 从头打开页面时不要「从第一张滑过来」那一下
-    panelTrack.classList.add("panel__track--dragging");
-    paintPanel(panelIndex);
-    // 下一帧再放开动画，否则这次位移会被一起动画掉
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        panelTrack.classList.remove("panel__track--dragging");
-        panelSwitching = false;
-      });
-    });
-  } else {
-    paintPanel(panelIndex);
-    clearTimeout(showPanelSlide.timer);
-    showPanelSlide.timer = setTimeout(() => {
-      panelSwitching = false;
-    }, 300);            // 跟 CSS 里的 .28s 对齐，稍微宽一点点
-  }
-
-  paintPanelHead();
-  setPanelCard(slide.id).catch((error) => console.error("[NKtab] 记卡片位置失败：", error));
-
-  // 人自己翻的这一下，把自动翻页的计时重新数 —— 别刚翻过去又被自动翻走
-  if (byUser) resumePanelAuto();
+  // 没删成就还原，别让人以为删掉了，下次打开又冒出来
+  recentItems = before;
+  paintRecent();
+  toast("这条没删掉");
 }
 
-/** 下一张 / 上一张。 */
-function stepPanel(delta) {
-  if (panelBusy()) return;
-  showPanelSlide(wrapIndex(panelIndex + delta));
+let clearTimer = 0;
+let clearArmed = false;
+
+/** 清空按钮收起「举起来」的样子。 */
+function disarmClear() {
+  clearArmed = false;
+  window.clearTimeout(clearTimer);
+  clearTimer = 0;
+  recentClear.classList.remove("recent__clear--armed");
+  recentClear.textContent = "清空";
 }
 
 /**
- * 自动翻页：闲着的时候自己往下走一张，绕回第一张接着走。
+ * 全清。
  *
- * 为什么不让它跟用户抢：
- *   - 用户自己点了箭头 / 圆点 / 键盘（stepPanel、showPanelSlide 走的那几条路），
- *     说明他现在正看着这一张，那就把计时重新开始，别过一会儿给他翻走；
- *   - 鼠标停在卡片上、或者浏览器这个标签页切到后台了，也停（省电，也不打扰）。
- *
- * 实现上「暂停」= clearTimeout，「恢复」= 重新计时，所以永远只有一个定时器。
+ * 删的是**整个浏览器历史**，不是只删这一栏里显示的那几条 ——
+ * 所以要点两下：第一下只是把按钮举起来问一句，四秒没动就自己放下。
  */
-function pausePanelAuto() {
-  window.clearTimeout(panelTimer);
-  panelTimer = null;
+async function clearRecent() {
+  if (!clearArmed) {
+    clearArmed = true;
+    recentClear.classList.add("recent__clear--armed");
+    recentClear.textContent = "确定清空？";
+    window.clearTimeout(clearTimer);
+    clearTimer = window.setTimeout(disarmClear, 4000);
+    return;
+  }
+
+  disarmClear();
+  const ok = await forgetAll();
+  await refreshRecent();
+  toast(ok ? "浏览历史清空了" : "没清掉，再试一次");
 }
 
-/*
-  ⚠️ 这里写 window.setTimeout 而不是光写 setTimeout：浏览器里两者是一回事，
-  但 Node（跑测试时）里「光写 setTimeout」拿的是全局的那个，测试想在 window 上
-  做假定时器就拦不住了。这个坑真的踩过 —— 测试里定时器一张账都没记上。
-*/
-function resumePanelAuto() {
-  pausePanelAuto();
-  if (PANEL_SLIDES.length < 2) return;      // 只有一张卡片就不用转了
-  panelTimer = window.setTimeout(() => {
-    panelTimer = null;
-    // 手正按着在拖 / 还开着菜单，就稍后再试，别硬挤进去
-    if (panelBusy()) {
-      resumePanelAuto();
+function initRecent() {
+  // 点列表里的东西：删除键优先，剩下的才是「打开」
+  recentList.addEventListener("click", (event) => {
+    const del = event.target.closest(".recent__del");
+    if (del) {
+      const row = del.closest(".recent__item");
+      if (row) dropRecent(row);
       return;
     }
-    showPanelSlide(wrapIndex(panelIndex + 1), { byUser: false });
-    resumePanelAuto();                      // 画完了接着排下一次
-  }, PANEL_AUTOPLAY_MS);
-  // 浏览器里 setTimeout 返回的是数字，没有这个方法；Node 里有。
-  // 不加这句，一个挂着的三分钟定时器会让测试进程一直不肯退出。
-  if (panelTimer && typeof panelTimer.unref === "function") panelTimer.unref();
+
+    const hit = event.target.closest(".recent__hit");
+    if (!hit) return;
+    const row = hit.closest(".recent__item");
+    if (row && row.dataset.url) openInNewTab(row.dataset.url);
+  });
+
+  // 过滤是纯本地筛选，不重新读历史
+  recentFilter.addEventListener("input", () => {
+    recentKeyword = recentFilter.value;
+    paintRecent();
+  });
+
+  recentRefresh.addEventListener("click", () => {
+    refreshRecent();
+  });
+
+  recentClear.addEventListener("click", () => {
+    clearRecent();
+  });
+
+  return refreshRecent();
 }
 
-function initPanelAuto() {
-  // 鼠标停在栏里就别翻，人可能正在看 / 正在打字
-  panel.addEventListener("mouseenter", pausePanelAuto);
-  panel.addEventListener("mouseleave", () => {
-    if (!document.hidden) resumePanelAuto();
-  });
-
-  // 切到别的标签页也停，回来接着算
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) pausePanelAuto();
-    else resumePanelAuto();
-  });
-
-  resumePanelAuto();
-}
-
-/** 底下那排圆点，几张卡片就几个点。 */
-function buildPanelDots() {
-  panelDots.innerHTML = "";
-  PANEL_SLIDES.forEach((slide, i) => {
-    const dot = document.createElement("button");
-    dot.type = "button";
-    dot.className = "panel__dot";
-    dot.title = slide.name;
-    dot.setAttribute("role", "tab");
-    dot.setAttribute("aria-label", slide.name);
-    dot.addEventListener("click", () => {
-      if (panelBusy()) return;
-      showPanelSlide(i);
-    });
-    panelDots.append(dot);
-  });
-}
-
-/**
- * 键盘 ←→ 换卡片。
- *
- * 加这个判断是因为搜索框里用左右键挪光标是很正常的操作，
- * 那时候不该顺手把侧栏翻一页。
- */
-function isTypingTarget(target) {
-  if (!target || target.nodeType !== 1) return false;
-  const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
-}
-
-/**
- * 鼠标按住横拖 / 手机上手势横滑。
- *
- * 用 Pointer Events 一套代码同时管鼠标和触摸，省得写两份。
- * 拖动时先只动画面、不动状态，等松手够了 40px 才真的翻页 ——
- * 不够就当没发生，弹回去。
- */
-function initPanelDrag() {
-  let pointerId = null;
-  let startX = 0;
-  let startY = 0;
-  let moved = 0;
-  let locked = null;       // 认定是「横着拖」还是「竖着滚」
-
-  panelView.addEventListener("pointerdown", (event) => {
-    if (event.pointerType === "mouse" && event.button !== 0) return;
-    if (panelBusy() || pointerId !== null) return;
-
-    pointerId = event.pointerId;
-    startX = event.clientX;
-    startY = event.clientY;
-    moved = 0;
-    locked = null;
-  });
-
-  panelView.addEventListener("pointermove", (event) => {
-    if (event.pointerId !== pointerId) return;
-
-    const dx = event.clientX - startX;
-    const dy = event.clientY - startY;
-
-    // 第一次挪动时看哪个方向大：竖向的就让页面自己滚，不抢
-    if (!locked) {
-      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-      locked = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
-      if (locked === "x") {
-        panelTrack.classList.add("panel__track--dragging");
-        panelView.setPointerCapture(pointerId);
-      } else {
-        pointerId = null;      // 这轮不归我们管了
-        return;
-      }
-    }
-
-    moved = dx;
-    const percent = (dx / panelView.clientWidth) * 100;
-    panelTrack.style.transform = `translateX(${-panelIndex * 100 + percent}%)`;
-  });
-
-  const finish = (event) => {
-    if (event.pointerId !== pointerId) return;
-
-    const dx = moved;
-    pointerId = null;
-    panelTrack.classList.remove("panel__track--dragging");
-
-    // 拖得够远才算数；短拖就是「我刚才按了一下」，弹回原位
-    if (Math.abs(dx) >= 40) {
-      // 往左拖 = 看下一张，往右拖 = 看上一张
-      showPanelSlide(wrapIndex(panelIndex + (dx < 0 ? 1 : -1)));
-    } else {
-      paintPanel(panelIndex);
-    }
-  };
-
-  panelView.addEventListener("pointerup", finish);
-  panelView.addEventListener("pointercancel", finish);
-}
-
-/** 把轮播搭起来。start() 里叫一次。 */
-async function initPanel() {
-  buildPanelDots();
-  initPanelDrag();
-
-  // 五张卡片的壳先一次性建好排成一条：切换只是整体左右挪，
-  // 不用临时插节点，也就不会在动画中途改 DOM 造成跳一下。
-  panelTrack.innerHTML = "";
-  PANEL_SLIDES.forEach((slide, i) => {
-    const box = document.createElement("section");
-    box.className = "panel__slide";
-    box.dataset.slide = slide.id;
-    box.setAttribute("role", "tabpanel");
-    box.setAttribute("aria-label", slide.name);
-    panelTrack.append(box);
-    slide.box = box;
-    slide.filled = false;
-    slide.mounted = false;
-    slide.index = i;
-  });
-
-  panelPrev.addEventListener("click", () => stepPanel(-1));
-  panelNext.addEventListener("click", () => stepPanel(1));
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-    if (event.altKey || event.ctrlKey || event.metaKey) return;   // 别抢浏览器的快捷键
-    if (isTypingTarget(event.target)) return;
-    event.preventDefault();      // 不然页面会左右滚
-    stepPanel(event.key === "ArrowRight" ? 1 : -1);
-  });
-
-  // 存着的那个 id 还认识哪张就停哪张；认不出来（比如卡片改过 id）就从第一张开始
-  const saved = await getPanelCard();
-  const index = PANEL_SLIDES.findIndex((slide) => slide.id === saved);
-
-  panelIndex = 0;                 // showPanelSlide 里要靠它判断「是不是同一张」
-  showPanelSlide(index < 0 ? 0 : index, { animate: false, byUser: false });
-  initPanelAuto();                // 搭好了才开始自动翻页
-}
 
 /* ---------------- 启动 ---------------- */
 
 async function start() {
   await applyWallpaper();
   await Promise.all([renderGrid(), refreshHistory()]);
-  initPanel().catch((error) => console.error(error));    // 侧栏卡片，读一下存的位置，很快
+  initRecent().catch((error) => console.error(error));   // 右边那一栏，读一次浏览器历史
   initWeather().catch((error) => console.error(error));  // 天气自己在后台拿，不挡着页面能用
   await restoreSearchEngine();                           // 上次选的搜索引擎
   searchInput.focus();     // 打开新标签页就能直接打字

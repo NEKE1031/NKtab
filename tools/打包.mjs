@@ -8,7 +8,7 @@
  *
  *   manifest.json → 新标签页 html、图标
  *   newtab.html   → 它 <script>/<link> 到的东西
- *   newtab.js     → 它 import 的模块（cards / lunar / search / storage / weather）
+ *   newtab.js     → 它 import 的模块（history / search / storage / weather）
  *
  * 爬不到的（wallpapers/、docs/、tools/、README.md、预览.html……）自然就进不了包。
  * 反过来，以后加了新模块也不用改这个脚本 —— 只要 newtab.js import 了它，它就在包里。

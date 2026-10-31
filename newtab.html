@@ -89,40 +89,48 @@
            但那样会把中间这一列挤得不居中，加之前先想清楚。 -->
       <div class="grid" id="grid"></div>
 
-      <!-- 右边这一栏：好几张功能卡片叠在一条栏杆上，一次只露一张，
-           左右箭头 / 圆点 / 键盘 ←→ / 横向拖动 都能换张。
+      <!-- 右边这一栏：**浏览器自己的**浏览历史（chrome.history），只读。
+           点一条就在新标签页里打开它；鼠标移到某条上，右边冒出一个 × 单独删掉。
            它和左边的天气卡片一样宽（248px），两边一对称，中间的色块就正了。
-           卡片内容由 newtab.js 里的 SLIDES 生成，这里只留壳。 -->
+           注意别跟搜索框里的「搜索记录」搞混：那个是在本页打过的字，存在我们
+           自己的存储里；这一栏读的是浏览器记的账，一个字都不往我们这儿存。 -->
       <aside class="panel">
         <div class="panel__head">
-          <span class="panel__icon" id="panel-icon" aria-hidden="true">🗓</span>
-          <span class="panel__name" id="panel-name">日历</span>
+          <span class="panel__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="8.4"></circle>
+              <polyline points="12 7.6 12 12 15.4 13.8"></polyline>
+            </svg>
+          </span>
+          <span class="panel__name">历史记录</span>
 
           <span class="panel__nav">
-            <button class="panel__arrow" id="panel-prev" type="button" title="上一张（←）"
-                    aria-label="上一张">
+            <button class="panel__arrow" id="recent-refresh" type="button" title="重新读一遍"
+                    aria-label="刷新历史记录">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="15 5 8 12 15 19"></polyline>
-              </svg>
-            </button>
-            <button class="panel__arrow" id="panel-next" type="button" title="下一张（→）"
-                    aria-label="下一张">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="9 5 16 12 9 19"></polyline>
+                <path d="M20 11.5a8 8 0 1 0-2.4 5.7"></path>
+                <polyline points="20 4.8 20 11.5 13.3 11.5"></polyline>
               </svg>
             </button>
           </span>
         </div>
 
-        <!-- 窗口：只露当前这一张卡片，别的横向排在外面 -->
-        <div class="panel__view" id="panel-view">
-          <div class="panel__track" id="panel-track"></div>
+        <!-- 过滤框：条数多的时候用来当场找，不重新读历史 -->
+        <input class="recent__filter" id="recent-filter" type="text" placeholder="在历史里找"
+               spellcheck="false" autocomplete="off" aria-label="在历史记录里查找">
+
+        <!-- 列表：按天分组（今天 / 昨天 / 10月30日），长了自己滚 -->
+        <div class="panel__view" id="recent-view">
+          <ul class="recent" id="recent-list"></ul>
         </div>
 
-        <!-- 底下那排圆点，点哪个跳哪张 -->
-        <div class="panel__dots" id="panel-dots" role="tablist" aria-label="侧栏卡片"></div>
+        <!-- 底下一行：一共几条 + 全清（要点两下才真删） -->
+        <div class="panel__foot">
+          <span class="recent__count" id="recent-count"></span>
+          <button class="recent__clear" id="recent-clear" type="button">清空</button>
+        </div>
       </aside>
 
     </div>

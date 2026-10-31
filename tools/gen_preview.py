@@ -28,9 +28,9 @@ tail = '''
 <script>
   const note = document.createElement("div");
   note.className = "preview-note";
-  note.innerHTML = '<b>本地预览页</b>：跟你真的新标签页一样（色块宫格、右边那栏卡片轮播、' +
-    '搜索框左边的小引擎图标 + 放大镜）。差别：没有壁纸（灰底代替）、' +
-    '读不到你真实的数据。';
+  note.innerHTML = '<b>本地预览页</b>：跟你真的新标签页一样（色块宫格、搜索框左边的小引擎图标 + 放大镜、' +
+    '右边那栏浏览历史）。差别：没有壁纸（灰底代替）、读不到你真实的数据 —— ' +
+    '历史那栏会显示「读不到浏览记录」，那是正常的。';
   const close = document.createElement("button");
   close.textContent = "知道了";
   close.onclick = () => note.remove();

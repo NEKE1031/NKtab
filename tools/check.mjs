@@ -6,8 +6,8 @@ const js = readFileSync(DIR + "newtab.js", "utf8");
 const css = readFileSync(DIR + "newtab.css", "utf8");
 
 // 除了 newtab.js，这几个也管界面，一起对账：
-//   cards.js  右边那栏五张卡片的内容
-const UI_MODULES = ["newtab", "cards"];
+//   history.js  右边那栏浏览历史的纯逻辑（不碰 DOM，但里面的 class 名会被 newtab.js 用）
+const UI_MODULES = ["newtab", "history"];
 const fail = [];
 const note = [];
 
@@ -15,8 +15,8 @@ const note = [];
 const htmlIds = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
 
 /* ---- 2. JS 里取用的 id ----
-   newtab.js 一直用 getElementById("x")；cards.js 是拿着自己那一块
-   往里 querySelector("#x")，两种都得算数，否则会误报「HTML 里的 id 没被用到」。 */
+   newtab.js 一直用 getElementById("x")；万一哪个模块是拿着自己那一块
+   往里 querySelector("#x")，也得算数，否则会误报「HTML 里的 id 没被用到」。 */
 const usedIds = new Set();
 const sources = [];
 for (const mod of UI_MODULES) {
@@ -35,7 +35,7 @@ for (const id of htmlIds) {
 console.log(`id 对账：HTML ${htmlIds.size} 个，JS 取用 ${usedIds.size} 个`);
 
 /* ---- 3. 各个模块的 export vs newtab.js 的 import ---- */
-for (const mod of ["storage", "weather", "search"]) {
+for (const mod of ["storage", "weather", "search", "history"]) {
   const source = readFileSync(DIR + mod + ".js", "utf8");
   const exported = new Set(
     [...source.matchAll(/export\s+(?:async\s+)?(?:function|const|let)\s+([A-Za-z_$][\w$]*)/g)]
@@ -60,7 +60,7 @@ for (const mod of ["storage", "weather", "search"]) {
 /* ---- 4. JS 里写的 class 名 vs CSS 里定义的 ----
    两种写法都要认：
      newtab.js  className = "a b"      （直接赋值）
-     cards.js   el("div", { className: "a b" })   （当参数传进去，是冒号） */
+     history.js className: "a b"       （当参数塞进对象里，是冒号） */
 const jsClasses = new Set();
 for (const source of sources) {
   for (const m of source.matchAll(/className\s*[:=]\s*"([^"]+)"/g)) {

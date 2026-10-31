@@ -9,7 +9,9 @@
  *   3. 三栏必须是 .weather + .grid + .panel，而且左右两边一样宽（248px）才对称
  *   4. .grid 在 HTML 里必须是空的 —— newtab.js 用 replaceChildren 整个换掉它，
  *      往里塞静态元素会被一起拿掉（踩过这个坑）
- *   5. .panel 那几个 id 是 newtab.js 按 id 抓的，少一个轮播就整块不工作
+ *   5. 右边那一栏那几个 id 是 newtab.js 按 id 抓的，少一个历史记录就整块不工作
+ *   6. 窄窗口那段的媒体查询必须排在 .panel 基础规则后面 —— 媒体查询不加优先级，
+ *      放前面会被后面的 248px 直接盖掉（这个坑真踩过：窄窗口下这一栏永远不竖下来）
  *
  * 跑法：
  *   node tools\测试页面结构.mjs
@@ -182,25 +184,60 @@ if (!grid) {
   }
 }
 
-/* ---------- 5. 卡片轮播那几个 id ---------- */
+/* ---------- 5. 右边那一栏（浏览历史）的几个 id ---------- */
 
-const panelIds = ["panel-icon", "panel-name", "panel-prev", "panel-next",
-                  "panel-view", "panel-track", "panel-dots"];
+const panelIds = ["recent-refresh", "recent-filter", "recent-view",
+                  "recent-list", "recent-count", "recent-clear"];
 const missing = panelIds.filter((id) => !byId(id));
 if (missing.length) {
-  fail.push(`卡片轮播缺 id：${missing.join("、")} —— newtab.js 抓不到就不工作`);
+  fail.push(`浏览历史那一栏缺 id：${missing.join("、")} —— newtab.js 抓不到就不工作`);
 } else {
-  ok.push(`卡片轮播的 ${panelIds.length} 个 id 齐全`);
+  ok.push(`浏览历史那一栏的 ${panelIds.length} 个 id 齐全`);
 }
 
-const view = byId("panel-view");
-const track = byId("panel-track");
-if (!view || !track) {
-  fail.push("找不到 #panel-view / #panel-track");
-} else if (track.parent !== view) {
-  fail.push("#panel-track 不在 #panel-view 里面 —— 滑动窗口那套会失效");
+const view = byId("recent-view");
+const list = byId("recent-list");
+if (!view || !list) {
+  fail.push("找不到 #recent-view / #recent-list");
+} else if (list.parent !== view) {
+  fail.push("#recent-list 不在 #recent-view 里面 —— 列表就滚不起来了");
 } else {
-  ok.push("#panel-track 在 #panel-view 里面");
+  ok.push("#recent-list 在 #recent-view 里面");
+}
+
+/* ---------- 6. 原来那套卡片轮播的残渣不该再出现 ---------- */
+
+const stale = ["panel-track", "panel-dots", "panel-prev", "panel-next", "panel-view"];
+const left = stale.filter((id) => byId(id));
+if (left.length) {
+  fail.push(`HTML 里还留着旧轮播的 id：${left.join("、")}`);
+} else {
+  ok.push("旧卡片轮播的 id 都清干净了");
+}
+
+for (const [name, src] of [["newtab.html", html], ["newtab.css", css]]) {
+  if (/\bpanel__track\b|\bpanel__dots\b|\bpanel__slide\b/.test(src)) {
+    fail.push(`${name} 里还有 panel__track / panel__dots / panel__slide 的痕迹`);
+  }
+}
+
+/* ---------- 7. 窄窗口那段媒体查询得排在 .panel 基础规则后面 ---------- */
+
+// 媒体查询不加优先级，同权重时谁在后面谁生效。`.panel` 基础规则里是固定的 248px，
+// 要是窄窗口那段跑到它前面，「竖排时改成居中、宽度放宽」就永远不起作用。
+{
+  const base = css.indexOf("\n.panel {");
+  const narrow = css.indexOf(".panel { align-self: center;");
+  if (base < 0) {
+    fail.push("newtab.css 里找不到 .panel 的基础规则");
+  } else if (narrow < 0) {
+    fail.push("newtab.css 里找不到窄窗口那段 .panel 的覆盖规则");
+  } else if (narrow < base) {
+    fail.push(`窄窗口那段 .panel 覆盖（第 ${css.slice(0, narrow).split("\n").length} 行）`
+      + `排在了基础规则（第 ${css.slice(0, base).split("\n").length} 行）前面，会被盖掉`);
+  } else {
+    ok.push("窄窗口的 .panel 覆盖排在基础规则后面，不会被盖掉");
+  }
 }
 
 /* ---------- 输出 ---------- */
@@ -212,4 +249,4 @@ if (fail.length) {
   console.log(`页面结构：${fail.length} 项没过`);
   process.exit(1);
 }
-console.log("页面结构：背景层 / 三栏对称 / 色块宫格是空的 / 卡片壳都在 / 全部通过。");
+console.log("页面结构：背景层 / 三栏对称 / 色块宫格是空的 / 历史记录壳都在 / 全部通过。");
