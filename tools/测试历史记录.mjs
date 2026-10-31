@@ -13,6 +13,7 @@
 
 import {
   MAX_ITEMS,
+  RECENT_SHOWN,
   clockText,
   dayKey,
   dayLabel,
@@ -205,7 +206,7 @@ expect("画出来几条（chrome:// 被滤掉）", rows().length, 5);
 expect("最新的排最前面", urls()[0], "https://www.bilibili.com/video/BV1");
 expect("最旧的排最后", urls()[4], "https://example.com/old");
 expectTrue("chrome:// 没混进来", !urls().some((u) => u.startsWith("chrome://")));
-expect("一共几条写在底部", countEl.textContent, "5 条");
+expect("一共几条写在底部", countEl.textContent, "最近 5 条");
 
 expect("分组标题有三个", dayHeads().length, 3);
 expect("第一个分组标题", dayHeads()[0].textContent, "今天");
@@ -228,14 +229,14 @@ rows()[0].querySelector(".recent__del").fire("click", {});
 await sleep(40);
 expect("单删之后少一条", rows().length, before - 1);
 expectTrue("假的历史里也真删了", !fake.items.some((i) => i.url === "https://www.bilibili.com/video/BV1"));
-expect("底部数字跟着变", countEl.textContent, "4 条");
+expect("底部数字跟着变", countEl.textContent, "最近 4 条");
 
 // 过滤：纯本地筛，不重新读历史
 filterEl.value = "github";
 filterEl.fire("input", {});
 await sleep(10);
 expect("按关键字筛出来一条", rows().length, 1);
-expect("底部变成 x / y 条", countEl.textContent, "1 / 4 条");
+expect("底部变成「找到几条」", countEl.textContent, "找到 1 条");
 
 filterEl.value = "根本搜不到";
 filterEl.fire("input", {});
@@ -254,6 +255,43 @@ refreshBtn.fire("click", {});
 await sleep(60);
 expect("刷新读到了新的一条", rows().length, 5);
 expect("新的一条排在最前面", urls()[0], "https://new.example/x");
+
+/* ---------------- 只摆最近 6 条 ---------------- */
+
+// 再塞 4 条新的，凑到 9 条可显示的（超过上限）
+for (const [i, h] of [5, 6, 7, 8].entries()) {
+  fake.items.push(visit(`https://bulk${i}.example/p${i}`, `多出来的一条 ${i}`, h * 60 * 60 * 1000));
+}
+refreshBtn.fire("click", {});
+await sleep(60);
+
+// 假历史里现在有 10 条原始记录，其中 chrome://settings 不算，可显示 9 条
+const loaded = normalizeItems(fake.items).length;
+expect("可显示的条目有 9 条（chrome:// 那条不算）", loaded, 9);
+
+expect("再多也只摆 6 条", rows().length, RECENT_SHOWN);
+expect("底部写的是「最近几条」", countEl.textContent, "最近 6 条");
+expectTrue("最旧的那条没被摆出来", !urls().includes("https://www.zhihu.com/question/1"));
+expect("最上面还是最新的", urls()[0], "https://new.example/x");
+
+// 但过滤是在「读回来的那一批」里找，所以第 7 条以后照样找得到
+filterEl.value = "很旧";
+filterEl.fire("input", {});
+await sleep(10);
+expect("过滤能翻到上限以外的旧条目", rows().length, 1);
+expect("找到的就是那条旧的", urls()[0], "https://example.com/old");
+
+// 命中数超过上限时，底部写成「摆了几条 / 一共命中几条」
+filterEl.value = "https";
+filterEl.fire("input", {});
+await sleep(10);
+expect("命中多于上限也只摆 6 条", rows().length, RECENT_SHOWN);
+expect("底部写成 x / y 条", countEl.textContent, `6 / ${loaded} 条`);
+
+filterEl.value = "";
+filterEl.fire("input", {});
+await sleep(10);
+expect("关键字清掉就回到 6 条", rows().length, RECENT_SHOWN);
 
 // 清空要点两下：第一下只是问一句
 clearBtn.fire("click", {});

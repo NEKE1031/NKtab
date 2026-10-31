@@ -114,6 +114,8 @@ SITES = [
 
 TILE_W, TILE_H, GAP_X, GAP_Y = 132, 74, 20, 22
 SIDE_W = 248
+# 单独抠出来画的这一栏有多高（要装下 6 条 + 顶栏 + 过滤框 + 底栏）
+PANEL_H = 460
 
 
 def draw_tiles(base, d, box, cols, sites, with_add=True):
@@ -172,7 +174,7 @@ def draw_panel(base, d, box, hover_row=1):
     传 None 就都不带。返回每一条的中心 y（绝对值），好让外面的编号点得着。
     """
     x, y = box
-    w, h = SIDE_W, 430
+    w, h = SIDE_W, PANEL_H
     glass(base, (x, y, x + w, y + h), 18)
 
     # 顶栏：小闹钟 + 历史记录 + 刷新
@@ -198,7 +200,8 @@ def draw_panel(base, d, box, hover_row=1):
                   ("G", "NEKE1031/NKtab", "github.com · 11:47", (88, 101, 242)),
                   ("百", "百度一下，你就知道", "www.baidu.com · 09:15", (43, 120, 241))]),
         ("昨天", [("知", "如何评价新的新标签页", "www.zhihu.com · 22:31", (0, 102, 255)),
-                  ("M", "机器学习速成课程", "developers.google.cn · 16:08", (234, 67, 53))]),
+                  ("M", "机器学习速成课程", "developers.google.cn · 16:08", (234, 67, 53)),
+                  ("P", "Pixiv 插画", "www.pixiv.net · 13:20", (0, 150, 200))]),
     ]
     ty = y + 84
     centers = []
@@ -220,7 +223,7 @@ def draw_panel(base, d, box, hover_row=1):
         ty += 6
 
     # 底部：条数 + 清空
-    text(d, (x + 16, y + h - 20), "23 条", 10, False, "lm", (255, 255, 255, 140))
+    text(d, (x + 16, y + h - 20), "最近 6 条", 10, False, "lm", (255, 255, 255, 140))
     rrect(base, (x + w - 62, y + h - 32, x + w - 12, y + h - 10), 9, (255, 255, 255, 26))
     text(d, (x + w - 37, y + h - 21), "清空", 10, False, "mm", (255, 255, 255, 200))
 
@@ -357,7 +360,7 @@ def panel_shot():
         ("3", "left", px + 18, py + 84),
         ("4", "left", px + 31, centers[0]),
         ("5", "right", px + SIDE_W - 24, centers[1]),
-        ("6", "right", px + SIDE_W - 37, py + 430 - 21),
+        ("6", "right", px + SIDE_W - 37, py + PANEL_H - 21),
     ]
     for num, side, tx, ty in marks:
         mx = 120 if side == "left" else 442
@@ -374,7 +377,7 @@ def panel_shot():
         ("3", "按天分组", "今天、昨天，再往前就写 10月30日 / 2025年3月8日"),
         ("4", "一条 = 首字母方块 + 标题 + 域名·时间", "方块颜色跟域名绑定，同一个站永远同色"),
         ("5", "鼠标移上去，右边出 ×", "点一下只删这一条（浏览器历史里也真删）"),
-        ("6", "底部：多少条 + 清空", "清空要点两下，第一下只是问一句"),
+        ("6", "底部：最近几条 + 清空", "一屏只摆 6 条，更早的在过滤框里找"),
     ]
     ly = 130
     for num, head, tail in lines:

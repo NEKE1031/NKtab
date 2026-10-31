@@ -49,6 +49,7 @@ import { fetchWeather, iconFor, REFRESH_AFTER } from "./weather.js";
 
 import {
   MAX_ITEMS,
+  RECENT_SHOWN,
   clockText,
   entryTitle,
   forgetAll,
@@ -1480,7 +1481,9 @@ function paintRecentRow(item) {
 
 /** 把现在的 recentItems 和过滤词画出来。 */
 function paintRecent() {
-  const shown = recentState === "ok" ? pickItems(recentItems, recentKeyword) : [];
+  const matched = recentState === "ok" ? pickItems(recentItems, recentKeyword) : [];
+  // 只摆最近几条；过滤的时候也一样，找到的多就摆前面几条，底下写清一共几条。
+  const shown = matched.slice(0, RECENT_SHOWN);
   const frag = document.createDocumentFragment();
 
   if (recentState !== "ok") {
@@ -1501,10 +1504,12 @@ function paintRecent() {
 
   if (recentState !== "ok") {
     recentCount.textContent = "";
-  } else if (recentKeyword) {
-    recentCount.textContent = `${shown.length} / ${recentItems.length} 条`;
+  } else if (!recentKeyword) {
+    recentCount.textContent = `最近 ${shown.length} 条`;
+  } else if (matched.length > shown.length) {
+    recentCount.textContent = `${shown.length} / ${matched.length} 条`;
   } else {
-    recentCount.textContent = `${recentItems.length} 条`;
+    recentCount.textContent = `找到 ${matched.length} 条`;
   }
 }
 
